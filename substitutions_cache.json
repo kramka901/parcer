@@ -1,0 +1,354 @@
+{
+  "2026-09-25": {
+    "timestamp": 1790368823.796415,
+    "data": {
+      "10A": [
+        {
+          "period": "2",
+          "info": "Rühm 1: Eesti keel teise keelena - Asendused: (Lind Valeri) ➔ Kulakova Dariya",
+          "type": "change"
+        },
+        {
+          "period": "2",
+          "info": "Rühm 2: Eesti keel teise keelena - Asendused: (Soopalu Kristi) ➔ Kulakova Dariya",
+          "type": "change"
+        }
+      ],
+      "11A": [
+        {
+          "period": "3",
+          "info": "Rühm 1: (Eesti keel teise keelena) ➔ Matemaatika - Asendused: (Lind Valeri) ➔ Maksimova Margarita, Vaheta ruumi: (301) ➔ 205",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Rühm 2: (Eesti keel teise keelena) ➔ Matemaatika - Asendused: (Soopalu Kristi) ➔ Maksimova Margarita, Vaheta ruumi: (302) ➔ 205",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Romanova Žanna",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Rühm 2: Arvuti kasutamine uurimistöös - Moved from period: 6, Asendused: (Jasjukevitš Oksana) ➔ Kulakova Dariya",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Rühm 1: Inglise keel - Moved from period: 6, Õpetaja: Kulakova Dariya, Vaheta ruumi: (106) ➔ Arvutiklass",
+          "type": "change"
+        },
+        {
+          "period": "(5)",
+          "info": "Loodusgeograafia - Kuznetsov Pavel, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "(6)",
+          "info": "Rühm 2: Arvuti kasutamine uurimistöös - Jasjukevitš Oksana, Moved to period: 5",
+          "type": "remove"
+        },
+        {
+          "period": "(6)",
+          "info": "Rühm 1: Inglise keel - Kulakova Dariya, Moved to period: 5",
+          "type": "remove"
+        },
+        {
+          "period": "(7)",
+          "info": "Riigikaitseõpetus - Lillipuu Henry-Kaarel, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "11B": [
+        {
+          "period": "2",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Voskoboinikov Vladimir",
+          "type": "change"
+        },
+        {
+          "period": "6",
+          "info": "Rühm 1: Eesti keel teise keelena - Moved from period: 7, Õpetaja: Üksiratsa Elona",
+          "type": "change"
+        },
+        {
+          "period": "(6)",
+          "info": "Riigikaitseõpetus - Lillipuu Henry-Kaarel, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "(7)",
+          "info": "Rühm 1: Eesti keel teise keelena - Üksiratsa Elona, Moved to period: 6",
+          "type": "remove"
+        }
+      ],
+      "11C": [
+        {
+          "period": "3",
+          "info": "Loodusgeograafia - Asendused: (Kuznetsov Pavel) ➔ Ahv Albert",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Riigikaitseõpetus - Asendused: (Lillipuu Henry-Kaarel) ➔ Ahv Albert",
+          "type": "change"
+        }
+      ],
+      "12A": [
+        {
+          "period": "2 - 3",
+          "info": "Puudub",
+          "type": "absent"
+        }
+      ],
+      "12B": [
+        {
+          "period": "2 - 3",
+          "info": "Praktiline matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Romanova Žanna",
+          "type": "change"
+        }
+      ],
+      "12C": [
+        {
+          "period": "1",
+          "info": "Praktiline matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Grihhina Irina",
+          "type": "change"
+        }
+      ],
+      "1A": [
+        {
+          "period": "1",
+          "info": "Emakeel ja kultuur - Asendused: (Kobašova Tatjana) ➔ Kivistik Carmen",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Kehaline kasvatus - Asendused: (Nisu Kris-Marie) ➔ Voskoboinikov Vladimir",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Kehaline kasvatus - Asendused: (Nisu Kris-Marie) ➔ Voskoboinikov Vladimir",
+          "type": "change"
+        }
+      ],
+      "1E": [
+        {
+          "period": "3",
+          "info": "Kehaline kasvatus - Asendused: (Nisu Kris-Marie) ➔ Voskoboinikov Vladimir",
+          "type": "change"
+        }
+      ],
+      "3A": [
+        {
+          "period": "1",
+          "info": "Eesti keel teise keelena - Asendused: (Vandel Maret) ➔ Leonova Julia",
+          "type": "change"
+        },
+        {
+          "period": "2",
+          "info": "Matemaatika - Asendused: (Vandel Maret) ➔ Ubei-Kon Ivi",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Eesti keel teise keelena - Asendused: (Vandel Maret) ➔ Leonova Julia",
+          "type": "change"
+        },
+        {
+          "period": "(5)",
+          "info": "Kunst ja tööõpetus - Vandel Maret, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "4-5E": [
+        {
+          "period": "2",
+          "info": "Kehaline kasvatus - Asendused: (Nisu Kris-Marie) ➔ Trjapitškina Jekaterina, Vaheta ruumi: (Võimla) ➔ 057",
+          "type": "change"
+        }
+      ],
+      "5K": [
+        {
+          "period": "3",
+          "info": "Kehaline kasvatus - Asendused: (Voskoboinikov Vladimir) ➔ Trjapitškina Jekaterina",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Matemaatika - Asendused: (Romet Reet) ➔ Savitševa Svetlana",
+          "type": "change"
+        }
+      ],
+      "5L": [
+        {
+          "period": "(1)",
+          "info": "Kirjandus - Romet Reet, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "6A": [
+        {
+          "period": "2",
+          "info": "Matemaatika - Asendused: (Romet Reet) ➔ Lüdikainen Natalja",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Kirjandus - Asendused: (Romet Reet) ➔ Einasto Natalie",
+          "type": "change"
+        }
+      ],
+      "6B": [
+        {
+          "period": "(1)",
+          "info": "Matemaatika - Kuznetsov Pavel, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "4",
+          "info": "Rühm 1: Inglise keel - Asendused: (Kovõlina Inna) ➔ Savitševa Svetlana",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Rühm 2: Inglise keel - Õpetaja: Savitševa Svetlana, Vaheta ruumi: (102) ➔ 107",
+          "type": "change"
+        },
+        {
+          "period": "6",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Nisu Kris-Marie) ➔ Kivimets Raiko",
+          "type": "change"
+        }
+      ],
+      "6E": [
+        {
+          "period": "2",
+          "info": "Matemaatika - Asendused: (Kuznetsov Pavel) ➔ Vannik Marina",
+          "type": "change"
+        }
+      ],
+      "6K": [
+        {
+          "period": "1",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Nisu Kris-Marie) ➔ Kivimets Raiko",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Kirjandus - Asendused: (Romet Reet) ➔ Nikkel Rita",
+          "type": "change"
+        }
+      ],
+      "7-8E": [
+        {
+          "period": "4",
+          "info": "Geograafia - Asendused: (Kuznetsov Pavel) ➔ Vannik Marina",
+          "type": "change"
+        }
+      ],
+      "7B": [
+        {
+          "period": "4",
+          "info": "Rühm 2: Inglise keel - Õpetaja: Cojuhari Veronika, Vaheta ruumi: (107) ➔ 102",
+          "type": "change"
+        }
+      ],
+      "8A": [
+        {
+          "period": "1",
+          "info": "Rühm 2: Inglise keel - Asendused: (Kovõlina Inna) ➔ Cojuhari Veronika",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Voskoboinikov Vladimir) ➔ Kivimets Raiko",
+          "type": "change"
+        },
+        {
+          "period": "(5)",
+          "info": "Rühm 2: Inglise keel - Kovõlina Inna, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "(5)",
+          "info": "Rühm 1: Informaatika - Jasjukevitš Oksana, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "(6)",
+          "info": "Bioloogia - Štšetina Tatjana, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "8K": [
+        {
+          "period": "3",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Kivimets Raiko",
+          "type": "change"
+        }
+      ],
+      "9A": [
+        {
+          "period": "2",
+          "info": "Rühm 1: Eesti keel teise keelena - Õpetaja: Kaetri Maria, Vaheta ruumi: (316) ➔ 204",
+          "type": "change"
+        },
+        {
+          "period": "2",
+          "info": "Rühm 2: Inglise keel - Asendused: (Kovõlina Inna) ➔ Kaetri Maria, Vaheta ruumi: (108) ➔ 204",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Nisu Kris-Marie) ➔ Kivimets Raiko",
+          "type": "change"
+        },
+        {
+          "period": "(6)",
+          "info": "Geograafia - Kuznetsov Pavel, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "9E": [
+        {
+          "period": "4",
+          "info": "Geograafia - Asendused: (Kuznetsov Pavel) ➔ Vannik Marina",
+          "type": "change"
+        }
+      ],
+      "9K": [
+        {
+          "period": "3",
+          "info": "Rühm 1: Eesti keel teise keelena - Õpetaja: Kaetri Maria, Vaheta ruumi: (316) ➔ 204",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Rühm 2: (Inglise keel) ➔ Eesti keel teise keelena - Asendused: (Kovõlina Inna) ➔ Kaetri Maria, Vaheta ruumi: (108) ➔ 204",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Rühm 2: (Eesti keel teise keelena) ➔ Inglise keel - Asendused: (Kaetri Maria) ➔ Cojuhari Veronika, Vaheta ruumi: (316) ➔ 108",
+          "type": "change"
+        }
+      ]
+    },
+    "date": "2026-09-25"
+  },
+  "2026-09-27": {
+    "timestamp": 1790460869.6820264,
+    "data": {
+      "BCE": [
+        {
+          "period": "",
+          "info": "Sellel päeval pole tühistatud tunde või asendusi.",
+          "type": "change"
+        }
+      ]
+    },
+    "date": "2026-09-27"
+  }
+}

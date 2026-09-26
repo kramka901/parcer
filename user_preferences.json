@@ -1,0 +1,10 @@
+{
+  "1637426603": {
+    "role": "teacher",
+    "notifications": true,
+    "teacher_name": "Tesla Aleksander"
+  },
+  "999999999": {
+    "notifications": false
+  }
+}
