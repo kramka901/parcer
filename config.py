@@ -32,6 +32,18 @@ SEEN_SUBSTITUTIONS_FILE = BASE_DIR / "seen_substitutions.json"
 TIMETABLE_CACHE_FILE = BASE_DIR / "timetable_cache.json"
 SUBSTITUTIONS_CACHE_FILE = BASE_DIR / "substitutions_cache.json"
 TEACHERS_DATA_FILE = BASE_DIR / "teachers.json"
+ADMINS_FILE = BASE_DIR / "admins.json"
+
+# Начальные ID администраторов
+DEFAULT_ADMIN_IDS = [1637426603]
+env_admin_ids = os.getenv("ADMIN_USER_IDS", "").strip()
+if env_admin_ids:
+    for aid_str in env_admin_ids.split(","):
+        aid_str = aid_str.strip()
+        if aid_str.isdigit():
+            aid = int(aid_str)
+            if aid not in DEFAULT_ADMIN_IDS:
+                DEFAULT_ADMIN_IDS.append(aid)
 
 # Настройки сети и прокси (опционально, если EduPage блокирует VPN)
 EDUPAGE_PROXY = os.getenv("EDUPAGE_PROXY", "").strip()
@@ -50,4 +62,3 @@ WEEKDAYS_RU = [
 ]
 
 WEEKDAYS_SHORT_RU = ["Пн", "Вт", "Ср", "Чт", "Пт"]
-

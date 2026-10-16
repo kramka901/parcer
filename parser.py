@@ -35,12 +35,73 @@ from config import (
 logger = logging.getLogger(__name__)
 
 
+def format_group_label(group_name: str) -> str:
+    """Форматирует название группы из EduPage в читаемый вид с иконками"""
+    if not group_name:
+        return ""
+    parts = [p.strip() for p in group_name.split(",") if p.strip()]
+    formatted_parts = []
+    for p in parts:
+        p_low = p.lower()
+        if "poisid" in p_low or "мальчик" in p_low:
+            formatted_parts.append("👦 Мальчики")
+        elif "tüdrukud" in p_low or "tudrukud" in p_low or "девочк" in p_low:
+            formatted_parts.append("👧 Девочки")
+        elif "rühm 1" in p_low or "grupp 1" in p_low or "1. rühm" in p_low or "1 grupp" in p_low:
+            formatted_parts.append("👥 1 группа")
+        elif "rühm 2" in p_low or "grupp 2" in p_low or "2. rühm" in p_low or "2 grupp" in p_low:
+            formatted_parts.append("👥 2 группа")
+        elif "rühm 3" in p_low or "grupp 3" in p_low:
+            formatted_parts.append("👥 3 группа")
+        elif "saksa" in p_low:
+            formatted_parts.append("🇩🇪 Немецкий яз.")
+        elif "prantsuse" in p_low:
+            formatted_parts.append("🇫🇷 Французский яз.")
+        elif p != "Terve klass":
+            formatted_parts.append(f"👥 {p}")
+
+    deduped = list(dict.fromkeys(formatted_parts))
+    return " ".join(deduped)
+
+
+def should_show_card(card: Dict[str, Any], subgroup_filter: Optional[Dict[str, str]]) -> bool:
+    """Проверяет, подходит ли урок под выбранные пользователем подгруппы"""
+    if not subgroup_filter:
+        return True
+
+    card_group = card.get("group", "")
+    if not card_group:
+        return True  # Урок для всего класса показываем всегда
+
+    group_low = card_group.lower()
+
+    # Фильтр по полу (физкультура и т.п.)
+    gender_filter = subgroup_filter.get("gender")
+    if gender_filter == "boys":
+        if "tüdrukud" in group_low or "tudrukud" in group_low:
+            return False
+    elif gender_filter == "girls":
+        if "poisid" in group_low:
+            return False
+
+    # Фильтр по академическим/языковым группам (1 группа / 2 группа)
+    academic_filter = subgroup_filter.get("academic")
+    if academic_filter in ("1", "group1"):
+        if "rühm 2" in group_low or "grupp 2" in group_low:
+            return False
+    elif academic_filter in ("2", "group2"):
+        if "rühm 1" in group_low or "grupp 1" in group_low:
+            return False
+
+    return True
+
+
 class MJGParser:
     """
     Парсер расписания и замен для Таллиннской Мустйыэской гимназии
     (www.mjg.ee / mustjoe.edupage.org)
-    Поддерживает работу с классами и учителями, устойчивое дисковое кэширование,
-    прокси и автономный режим.
+    Поддерживает работу с классами, учителями (с кабинетами и классами),
+    подгруппами (мальчики/девочки, группы 1/2), устойчивое дисковое кэширование и автономный режим.
     """
 
     def __init__(self):
@@ -88,21 +149,23 @@ class MJGParser:
             except Exception as e:
                 logger.warning(f"Ошибка загрузки timetable_cache.json: {e}")
 
-        # 2. Учителя (если есть отдельный файл)
-        if not self._teachers_cache and TEACHERS_DATA_FILE.exists():
+        # 2. Учителя (из отдельного файла teachers.json, если кэш пуст или для дополнения)
+        if TEACHERS_DATA_FILE.exists():
             try:
                 with open(TEACHERS_DATA_FILE, "r", encoding="utf-8") as f:
                     t_list = json.load(f)
-                    self._teachers_cache = {
-                        t["full_name"]: {
-                            "id": t["full_name"],
-                            "name": t["full_name"],
-                            "surname": t["surname"],
-                            "firstname": t["firstname"],
-                            "short": t["surname"]
-                        }
-                        for t in t_list
-                    }
+                    if not self._teachers_cache:
+                        self._teachers_cache = {}
+                    for t in t_list:
+                        fname = t.get("full_name")
+                        if fname and fname not in self._teachers_cache:
+                            self._teachers_cache[fname] = {
+                                "id": fname,
+                                "name": fname,
+                                "surname": t.get("surname", ""),
+                                "firstname": t.get("firstname", ""),
+                                "short": t.get("surname", "")
+                            }
             except Exception as e:
                 logger.warning(f"Ошибка загрузки teachers.json: {e}")
 
@@ -141,13 +204,10 @@ class MJGParser:
         if not class_name:
             return ""
         name = class_name.strip().upper()
-        # Замена русских букв на латиницу для единообразия в названиях классов
         ru_to_en = {"А": "A", "В": "B", "С": "C", "Е": "E", "К": "K"}
         for r, e in ru_to_en.items():
             name = name.replace(r, e)
-        # Убираем пробелы между цифрами и буквами: "10 A" -> "10A"
         name = re.sub(r'(\d+)\s+([A-ZА-ЯЁ])', r'\1\2', name)
-        # Убираем дефис, если это не диапазон классов: "10-A" -> "10A"
         if re.match(r'^\d+-[A-ZА-ЯЁ]$', name):
             name = name.replace('-', '')
         return name
@@ -178,7 +238,7 @@ class MJGParser:
         q_translit = self.transliterate_ru_to_et(q)
         teachers = self.get_teachers()
 
-        # 1. Точное совпадение
+        # 1. Точное совпадение с полным именем
         for t_name in teachers.keys():
             t_low = t_name.lower()
             if t_low in (q, q_translit):
@@ -198,7 +258,6 @@ class MJGParser:
 
         for t_name in teachers.keys():
             t_low = t_name.lower()
-            # Проверяем и с мягкими знаками / без (например zanna vs žanna)
             t_simplified = t_low.replace('ž', 'z').replace('š', 's').replace('õ', 'o').replace('ä', 'a').replace('ö', 'o').replace('ü', 'u')
             q_simplified = q_translit.replace('ž', 'z').replace('š', 's').replace('õ', 'o').replace('ä', 'a').replace('ö', 'o').replace('ü', 'u')
             if q in t_low or q_translit in t_low or q_simplified in t_simplified:
@@ -245,7 +304,6 @@ class MJGParser:
         except Exception as e:
             logger.warning(f"Не удалось получить метаданные расписания онлайн: {e}")
 
-        # Fallback
         return {
             "default_num": "37",
             "timetables": [],
@@ -262,6 +320,7 @@ class MJGParser:
             not force_refresh
             and self._timetable_cache is not None
             and (now - self._timetable_cache_time) < TIMETABLE_CACHE_TTL
+            and self._timetable_cache.get("teachers")
         ):
             return self._timetable_cache
 
@@ -302,6 +361,17 @@ class MJGParser:
                     periods_map = raw_tables.get("periods", {})
                     lessons_map = raw_tables.get("lessons", {})
                     cards_map = raw_tables.get("cards", {})
+                    groups_map = raw_tables.get("groups", {})
+
+                    # Загружаем учителей из teachers.json для точного сопоставления ФИО
+                    t_list = []
+                    if TEACHERS_DATA_FILE.exists():
+                        try:
+                            with open(TEACHERS_DATA_FILE, "r", encoding="utf-8") as f:
+                                t_list = json.load(f)
+                        except Exception:
+                            pass
+                    t_by_surname = {t["surname"].lower(): t for t in t_list}
 
                     periods_dict = {}
                     for pid, p in periods_map.items():
@@ -323,18 +393,39 @@ class MJGParser:
                             }
 
                     teachers_dict = {}
+                    teachers_id_to_name = {}
+
                     for tid, t in teachers_map.items():
-                        t_name = t.get("name", "").strip()
-                        surname = t.get("lastname", "").strip() or (t_name.split()[0] if t_name else "")
-                        firstname = t.get("firstname", "").strip() or (t_name.split()[1] if len(t_name.split()) > 1 else "")
-                        full_name = f"{surname} {firstname}".strip() or t_name
-                        if full_name:
-                            teachers_dict[full_name] = {
-                                "id": tid,
-                                "name": full_name,
-                                "surname": surname,
-                                "firstname": firstname,
-                                "short": t.get("short", surname)
+                        short = t.get("short", "").strip()
+                        match = t_by_surname.get(short.lower())
+                        if match:
+                            full_name = match["full_name"]
+                            surname = match["surname"]
+                            firstname = match["firstname"]
+                        else:
+                            surname = short or tid
+                            firstname = ""
+                            full_name = surname
+
+                        teachers_dict[full_name] = {
+                            "id": tid,
+                            "name": full_name,
+                            "surname": surname,
+                            "firstname": firstname,
+                            "short": short or surname
+                        }
+                        teachers_id_to_name[tid] = full_name
+
+                    # Добавляем остальных учителей из teachers.json
+                    for t in t_list:
+                        fname = t["full_name"]
+                        if fname not in teachers_dict:
+                            teachers_dict[fname] = {
+                                "id": fname,
+                                "name": fname,
+                                "surname": t.get("surname", ""),
+                                "firstname": t.get("firstname", ""),
+                                "short": t.get("surname", "")
                             }
 
                     schedule_by_class: Dict[str, Dict[int, Dict[int, List[Dict[str, Any]]]]] = {}
@@ -358,14 +449,27 @@ class MJGParser:
 
                             teacher_names = []
                             for tid in lesson.get("teacherids", []):
-                                t = teachers_map.get(tid, {})
-                                full_t = f"{t.get('lastname', '')} {t.get('firstname', '')}".strip() or t.get("name", tid)
-                                teacher_names.append(full_t)
+                                t_name = teachers_id_to_name.get(tid, tid)
+                                teacher_names.append(t_name)
 
                             room_names = []
                             for rid in card.get("classroomids", []):
                                 r = classrooms_map.get(rid, {})
                                 room_names.append(r.get("short") or r.get("name", rid))
+
+                            # Извлечение подгрупп (Poisid, Tüdrukud, Rühm 1, Rühm 2 и т.д.)
+                            gnames = []
+                            for gid in lesson.get("groupids", []):
+                                g_obj = groups_map.get(gid, {})
+                                gn = g_obj.get("name", "").strip() if isinstance(g_obj, dict) else ""
+                                if gn and gn != "Terve klass":
+                                    gnames.append(gn)
+                            if not gnames and lesson.get("groupnames"):
+                                for gn in lesson.get("groupnames", []):
+                                    if gn and gn.strip() and gn.strip() != "Terve klass":
+                                        gnames.append(gn.strip())
+                            deduped_gnames = list(dict.fromkeys(gnames))
+                            group_str = ", ".join(deduped_gnames)
 
                             period_num = int(card.get("period", 1))
                             period_info = periods_dict.get(str(period_num), {})
@@ -378,7 +482,7 @@ class MJGParser:
                                 "subject": subject_name,
                                 "teachers": teacher_names,
                                 "classrooms": room_names,
-                                "group": lesson.get("groupnames", [""])[0] if lesson.get("groupnames") else ""
+                                "group": group_str
                             }
 
                             days_str = card.get("days", "")
@@ -402,11 +506,9 @@ class MJGParser:
         except Exception as e:
             logger.warning(f"Ошибка загрузки расписания онлайн ({e}), используется локальный кэш.")
 
-        # Если онлайн не удался, используем сохраненный кэш
         if self._timetable_cache:
             return self._timetable_cache
 
-        # Экстренный пустой fallback
         return {
             "periods": {},
             "classes": {},
@@ -447,7 +549,6 @@ class MJGParser:
             return None
 
         class_tt = schedule_by_class[norm_name]
-        # Приводим строковые ключи из JSON к целым числам (дни 0..4, уроки 1..8)
         normalized_tt: Dict[int, Dict[int, List[Dict[str, Any]]]] = {}
         for d_key, d_val in class_tt.items():
             try:
@@ -472,13 +573,18 @@ class MJGParser:
     def get_teacher_schedule(self, teacher_name: str, day_index: Optional[int] = None) -> Dict[int, Dict[int, List[Dict[str, Any]]]]:
         """
         Формирует расписание уроков конкретного преподавателя на неделю по всем классам.
-        schedule[day_idx][period_num] = list of lessons (с указанием класса и кабинета)
+        schedule[day_idx][period_num] = list of lessons (с указанием класса, кабинета и подгруппы)
         """
         norm_t = self.normalize_teacher_name(teacher_name) or teacher_name
         tt = self.get_regular_timetable()
         schedule_by_class = tt.get("schedule", {})
 
         teacher_schedule: Dict[int, Dict[int, List[Dict[str, Any]]]] = {d: {} for d in range(5)}
+
+        search_terms = [norm_t.lower()]
+        parts = norm_t.split()
+        if len(parts) >= 2:
+            search_terms.append(parts[0].lower())  # Фамилия отдельно
 
         for c_name, class_days in schedule_by_class.items():
             for d_key, day_lessons in class_days.items():
@@ -496,8 +602,9 @@ class MJGParser:
                         except ValueError:
                             continue
                         for card in cards:
-                            card_teachers = card.get("teachers", [])
-                            if any(norm_t.lower() in t.lower() or t.lower() in norm_t.lower() for t in card_teachers):
+                            card_teachers = [t.lower() for t in card.get("teachers", [])]
+                            matched = any(term in ct for ct in card_teachers for term in search_terms)
+                            if matched:
                                 lesson_copy = dict(card)
                                 lesson_copy["class_name"] = c_name
                                 teacher_schedule[d_int].setdefault(p_int, []).append(lesson_copy)
@@ -652,9 +759,9 @@ class MJGParser:
                             role = "absent"  # Преподаватель отсутствует / заменяется
                         elif any(term in right.lower() for term in search_terms):
                             role = "substituting"  # Преподаватель ведет замену
-                    elif "tühistatud" in info_lower:
+                    elif "tühistatud" in info_lower or "отмен" in info_lower:
                         role = "cancelled"
-                    elif "õpetaja:" in info_lower:
+                    elif "õpetaja:" in info_lower or "учитель:" in info_lower:
                         role = "assigned"
 
                     teacher_items.append({
@@ -809,8 +916,13 @@ class MJGParser:
 
     # ================= Форматирование для Telegram (Классы) =================
 
-    def format_schedule_for_telegram(self, class_name: str, day_index: Optional[int] = None) -> str:
-        """Форматирует расписание класса для Telegram"""
+    def format_schedule_for_telegram(
+        self,
+        class_name: str,
+        day_index: Optional[int] = None,
+        subgroup_filter: Optional[Dict[str, str]] = None
+    ) -> str:
+        """Форматирует расписание класса для Telegram с поддержкой подгрупп и кабинетов"""
         norm_class = self.normalize_class_name(class_name)
         classes = self.get_classes()
         if norm_class not in classes:
@@ -832,11 +944,17 @@ class MJGParser:
             else:
                 for p_num in sorted(day_lessons.keys()):
                     cards = day_lessons[p_num]
-                    for card in cards:
+                    visible_cards = [c for c in cards if should_show_card(c, subgroup_filter)]
+                    if not visible_cards:
+                        continue
+
+                    for card in visible_cards:
                         time_part = f"_{card['time']}_ " if card.get("time") else ""
                         teachers = f" ({', '.join(card['teachers'])})" if card.get("teachers") else ""
                         rooms = f" [каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else ""
-                        lines.append(f"  *{p_num}.* {time_part}*{card['subject']}*{teachers}{rooms}")
+                        grp_label = f" {format_group_label(card['group'])}" if card.get("group") else ""
+
+                        lines.append(f"  *{p_num}.* {time_part}*{card['subject']}*{grp_label}{teachers}{rooms}")
             lines.append("")
 
         return "\n".join(lines).strip()
@@ -883,9 +1001,10 @@ class MJGParser:
     def format_day_combined_for_telegram(
         self,
         class_name: str,
-        target_date: Optional[date] = None
+        target_date: Optional[date] = None,
+        subgroup_filter: Optional[Dict[str, str]] = None
     ) -> str:
-        """Форматирует расписание + замены на день для класса"""
+        """Форматирует расписание + замены на день для класса с подгруппами"""
         if target_date is None:
             target_date = date.today()
 
@@ -924,11 +1043,16 @@ class MJGParser:
                         icon = "❌" if s["type"] == "remove" else "⚠️" if s["type"] == "absent" else "🔄"
                         lines.append(f"*{p_num}.* {time_str}{icon} *ЗАМЕНА:* {s['info']}")
                 else:
-                    if reg_cards:
-                        for card in reg_cards:
+                    visible_cards = [c for c in reg_cards if should_show_card(c, subgroup_filter)]
+                    if visible_cards:
+                        for card in visible_cards:
                             teachers = f" ({', '.join(card['teachers'])})" if card.get("teachers") else ""
                             rooms = f" [каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else ""
-                            lines.append(f"*{p_num}.* {time_str}*{card['subject']}*{teachers}{rooms}")
+                            grp_label = f" {format_group_label(card['group'])}" if card.get("group") else ""
+                            lines.append(f"*{p_num}.* {time_str}*{card['subject']}*{grp_label}{teachers}{rooms}")
+                    elif reg_cards:
+                        # Урок есть, но в другой подгруппе пользователя
+                        continue
                     else:
                         lines.append(f"*{p_num}.* {time_str}_Окно (нет урока)_")
 
@@ -942,7 +1066,7 @@ class MJGParser:
     # ================= Форматирование для Telegram (Учителя) =================
 
     def format_teacher_schedule_for_telegram(self, teacher_name: str, day_index: Optional[int] = None) -> str:
-        """Форматирует расписание уроков преподавателя на неделю"""
+        """Форматирует расписание уроков преподавателя на неделю с указанием классов и кабинетов"""
         norm_t = self.normalize_teacher_name(teacher_name) or teacher_name
         sched = self.get_teacher_schedule(norm_t)
 
@@ -960,15 +1084,16 @@ class MJGParser:
                     cards = day_lessons[p_num]
                     for card in cards:
                         time_part = f"_{card['time']}_ " if card.get("time") else ""
-                        c_name = f"*{card.get('class_name', '')}*"
-                        rooms = f" [каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else ""
-                        lines.append(f"  *{p_num}.* {time_part}{c_name} — {card['subject']}{rooms}")
+                        c_name = f"Класс *{card.get('class_name', '')}*"
+                        rooms = f" [🚪 каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else " [каб. не указан]"
+                        grp_label = f" ({format_group_label(card['group'])})" if card.get("group") else ""
+                        lines.append(f"  *{p_num}.* {time_part}{c_name}{grp_label} — *{card['subject']}*{rooms}")
             lines.append("")
 
         return "\n".join(lines).strip()
 
     def format_teacher_substitutions_for_telegram(self, teacher_name: str, date_str: Optional[str] = None) -> str:
-        """Форматирует список замен для конкретного преподавателя"""
+        """Форматирует список замен для конкретного преподавателя с указанием классов и кабинетов"""
         if not date_str:
             date_str = date.today().strftime("%Y-%m-%d")
 
@@ -1008,7 +1133,7 @@ class MJGParser:
         teacher_name: str,
         target_date: Optional[date] = None
     ) -> str:
-        """Форматирует уроки и замены преподавателя на конкретный день"""
+        """Форматирует уроки и замены преподавателя на день с указанием классов и кабинетов"""
         if target_date is None:
             target_date = date.today()
 
@@ -1040,12 +1165,13 @@ class MJGParser:
                     for s in substs:
                         role = s.get("teacher_role")
                         prefix = "🟢 Заменяете" if role == "substituting" else "🔴 Вас заменяют" if role == "absent" else "❌ Отмена"
-                        lines.append(f"*{p_num}.* {time_str}*[{prefix}]* {s['class_name']}: {s['info']}")
+                        lines.append(f"*{p_num}.* {time_str}*[{prefix}]* Класс *{s['class_name']}*: {s['info']}")
                 elif reg_cards:
                     for card in reg_cards:
-                        c_name = f"*{card.get('class_name', '')}*"
-                        rooms = f" [каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else ""
-                        lines.append(f"*{p_num}.* {time_str}{c_name} — {card['subject']}{rooms}")
+                        c_name = f"Класс *{card.get('class_name', '')}*"
+                        rooms = f" [🚪 каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else " [каб. не указан]"
+                        grp_label = f" ({format_group_label(card['group'])})" if card.get("group") else ""
+                        lines.append(f"*{p_num}.* {time_str}{c_name}{grp_label} — *{card['subject']}*{rooms}")
                 else:
                     lines.append(f"*{p_num}.* {time_str}_Окно_")
 

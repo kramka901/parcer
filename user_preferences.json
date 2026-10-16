@@ -1,8 +1,9 @@
 {
   "1637426603": {
-    "role": "teacher",
+    "role": "student",
     "notifications": true,
-    "teacher_name": "Tesla Aleksander"
+    "class_name": "8K",
+    "subgroup_gender": "boys"
   },
   "999999999": {
     "notifications": false

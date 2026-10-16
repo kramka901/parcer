@@ -6,11 +6,12 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 import os
 from datetime import date, timedelta
-from parser import MJGParser
+from parser import MJGParser, format_group_label, should_show_card
+from bot import AdminManager, UserPreferences
 
 def run_tests():
     print("=" * 65)
-    print("🚀 НАЧАЛО ТЕСТИРОВАНИЯ ПАРСЕРА И МОДУЛЕЙ MJG (www.mjg.ee)")
+    print("🚀 НАЧАЛО ТЕСТИРОВАНИЯ ОБНОВЛЁННОГО БОТА И ПАРСЕРА MJG (www.mjg.ee)")
     print("=" * 65)
 
     parser = MJGParser()
@@ -36,13 +37,12 @@ def run_tests():
     print("\n[ТЕСТ 2] Получение списка классов школы:")
     classes = parser.get_classes()
     print(f"  Найдено классов: {len(classes)}")
-    sample_classes = list(classes.keys())[:10]
-    print(f"  Примеры классов: {', '.join(sample_classes)}")
     assert len(classes) >= 30, "В школе MJG должно быть не менее 30 классов!"
     assert "10A" in classes, "Класс 10A должен присутствовать!"
+    assert "8K" in classes, "Класс 8K должен присутствовать!"
     print("  ✅ Список классов успешно получен!")
 
-    # 3. Тест получения преподавателей и поиска по фамилии
+    # 3. Тест учителей и поиска по фамилии
     print("\n[ТЕСТ 3] Список учителей и поиск по имени/транслиту:")
     teachers = parser.get_teachers()
     print(f"  Всего преподавателей в базе: {len(teachers)}")
@@ -52,72 +52,82 @@ def run_tests():
     print(f"  Поиск 'Кулакова' -> '{t1}'")
     assert t1 == "Kulakova Dariya", f"Ожидалось Kulakova Dariya, получено {t1}"
 
-    t2 = parser.normalize_teacher_name("Романова")
-    print(f"  Поиск 'Романова' -> '{t2}'")
-    assert t2 == "Romanova Žanna", f"Ожидалось Romanova Žanna, получено {t2}"
+    t2 = parser.normalize_teacher_name("Ahv")
+    print(f"  Поиск 'Ahv' -> '{t2}'")
+    assert t2 == "Ahv Albert", f"Ожидалось Ahv Albert, получено {t2}"
 
-    t3 = parser.normalize_teacher_name("Ahv")
-    print(f"  Поиск 'Ahv' -> '{t3}'")
-    assert t3 == "Ahv Albert", f"Ожидалось Ahv Albert, получено {t3}"
+    t3 = parser.normalize_teacher_name("Тряпичкина")
+    print(f"  Поиск 'Тряпичкина' -> '{t3}'")
+    assert t3 == "Trjapitškina Jekaterina", f"Ожидалось Trjapitškina Jekaterina, получено {t3}"
     print("  ✅ Поиск преподавателей на кириллице и латинице работает корректно!")
 
-    # 4. Тест расписания для класса 10A
-    print("\n[ТЕСТ 4] Расписание для класса 10A на неделю:")
-    sched_10a = parser.get_class_schedule("10A")
-    assert sched_10a is not None, "Расписание 10A не должно быть пустым!"
-    print(f"  Дней с уроками: {len(sched_10a)}")
-    day0 = sched_10a.get(0, {})
-    print(f"  Понедельник (уроков: {len(day0)})")
-    for p, cards in list(day0.items())[:2]:
-        for c in cards:
-            print(f"    Урок {p} ({c['time']}): {c['subject']} {c['teachers']} [каб. {', '.join(c['classrooms'])}]")
-    print("  ✅ Базовое расписание класса 10A загружено!")
+    # 4. Тест расписания для класса и проверки подгрупп (мальчики / девочки)
+    print("\n[ТЕСТ 4] Расписание класса 8K и подгруппы (физ-ра мальчики/девочки):")
+    sched_8k = parser.get_class_schedule("8K")
+    assert sched_8k is not None, "Расписание 8K не должно быть пустым!"
+    monday_8k = sched_8k.get(0, {})
+    p1_cards = monday_8k.get(1, [])
+    assert len(p1_cards) >= 2, "1 урок в понедельник у 8K должен быть разделен на подгруппы (мальчики и девочки)!"
 
-    # 5. Тест расписания для преподавателя
-    print("\n[ТЕСТ 5] Расписание преподавателя Kulakova Dariya:")
-    sched_kulakova = parser.get_teacher_schedule("Kulakova Dariya")
-    total_teacher_lessons = sum(len(lessons) for d in sched_kulakova.values() for lessons in d.values())
-    print(f"  Всего уроков у преподавателя на неделе: {total_teacher_lessons}")
-    assert total_teacher_lessons > 0, "У преподавателя должны быть уроки в расписании!"
-    print("  ✅ Расписание преподавателя успешно сформировано!")
+    groups_found = [c.get("group") for c in p1_cards]
+    print(f"  Урок 1 понедельник у 8K: найдены группы {groups_found}")
+    assert any("Tüdrukud" in g for g in groups_found), "Должна быть группа девочек Tüdrukud!"
+    assert any("Poisid" in g for g in groups_found), "Должна быть группа мальчиков Poisid!"
 
-    # 6. Тест замен уроков
-    print("\n[ТЕСТ 6] Получение замен уроков:")
-    subst_today = parser.get_substitutions()
-    classes_with_subst = subst_today.get("classes", {})
-    subst_date = subst_today.get("date")
-    print(f"  Дата замен: {subst_date}")
-    print(f"  Классов с заменами: {len(classes_with_subst)}")
+    # Проверка фильтрации подгрупп
+    filter_boys = {"gender": "boys"}
+    filter_girls = {"gender": "girls"}
 
-    # Замены для конкретного класса
-    subst_10a = parser.get_substitutions(class_name="10A")
-    print(f"  Замен для класса 10A: {len(subst_10a.get('substitutions', []))}")
-    for it in subst_10a.get('substitutions', [])[:2]:
-        print(f"    [{it['period']} урок]: {it['info']}")
+    visible_boys = [c for c in p1_cards if should_show_card(c, filter_boys)]
+    visible_girls = [c for c in p1_cards if should_show_card(c, filter_girls)]
+    print(f"  Фильтр мальчиков оставил карточек: {len(visible_boys)} (ожидается 1)")
+    print(f"  Фильтр девочек оставил карточек: {len(visible_girls)} (ожидается 1)")
+    assert len(visible_boys) == 1 and "Poisid" in visible_boys[0]["group"]
+    assert len(visible_girls) == 1 and "Tüdrukud" in visible_girls[0]["group"]
+    print("  ✅ Подгруппы физкультуры (мальчики/девочки) и фильтрация работают идеально!")
 
-    # Замены для учителя
-    t_subst = parser.get_teacher_substitutions("Kulakova Dariya")
-    print(f"  Замен для учителя Kulakova Dariya: {len(t_subst.get('substitutions', []))}")
-    for it in t_subst.get('substitutions', [])[:2]:
-        print(f"    [{it['class_name']}, {it['period']} урок, роль: {it['teacher_role']}]: {it['info']}")
-    print("  ✅ Замены для классов и учителей успешно обработаны!")
+    # 5. Тест расписания преподавателей: классы и кабинеты
+    print("\n[ТЕСТ 5] Расписание преподавателей (классы, кабинеты, группы):")
+    sched_k = parser.get_teacher_schedule("Kulakova Dariya")
+    total_k = sum(len(lessons) for d in sched_k.values() for lessons in d.values())
+    print(f"  Kulakova Dariya: всего уроков на неделе: {total_k}")
+    assert total_k > 0, "У Kulakova Dariya должны быть уроки в расписании!"
 
-    # 7. Тест форматирования сообщений для Telegram
+    sample_lesson = list(sched_k[0].values())[0][0]
+    print(f"  Пример урока: Класс: {sample_lesson.get('class_name')}, Кабинет: {sample_lesson.get('classrooms')}, Предмет: {sample_lesson.get('subject')}")
+    assert sample_lesson.get("class_name"), "У урока учителя должен быть указан класс!"
+    assert sample_lesson.get("classrooms"), "У урока учителя должен быть указан кабинет!"
+
+    sched_trjap = parser.get_teacher_schedule("Trjapitškina Jekaterina")
+    total_trjap = sum(len(lessons) for d in sched_trjap.values() for lessons in d.values())
+    print(f"  Trjapitškina Jekaterina: всего уроков на неделе: {total_trjap}")
+    assert total_trjap > 0, "У Trjapitškina Jekaterina должны быть уроки в расписании!"
+    print("  ✅ Расписание учителей с классами и кабинетами сформировано корректно!")
+
+    # 6. Тест панели администратора и управления администраторами
+    print("\n[ТЕСТ 6] Управление администраторами (AdminManager):")
+    admin_mgr = AdminManager()
+    assert admin_mgr.is_admin(1637426603), "Начальный админ 1637426603 должен быть в списке!"
+
+    test_admin_id = 987654321
+    added = admin_mgr.add_admin(test_admin_id)
+    assert admin_mgr.is_admin(test_admin_id), "Новый администратор должен быть добавлен!"
+    removed = admin_mgr.remove_admin(test_admin_id)
+    assert not admin_mgr.is_admin(test_admin_id), "Администратор должен быть успешно удален!"
+    print("  ✅ Добавление, проверка и удаление администраторов работают корректно!")
+
+    # 7. Тест форматирования сообщений
     print("\n[ТЕСТ 7] Проверка форматирования сообщений Telegram:")
-    msg_class_sched = parser.format_schedule_for_telegram("10A", day_index=0)
-    print("--- Сообщение: Расписание 10A на понедельник ---")
+    msg_class_sched = parser.format_schedule_for_telegram("8K", day_index=0, subgroup_filter=filter_boys)
+    print("--- Сообщение: Расписание 8K с фильтром мальчиков ---")
     print(msg_class_sched[:180] + "...\n")
 
-    msg_teacher_subst = parser.format_teacher_substitutions_for_telegram("Kulakova Dariya")
-    print("--- Сообщение: Замены преподавателя ---")
-    print(msg_teacher_subst[:220] + "...\n")
-
-    msg_combined = parser.format_day_combined_for_telegram("10A", target_date=date.today())
-    print("--- Сообщение: Объединенный день для класса ---")
-    print(msg_combined[:200] + "...\n")
+    msg_teacher_sched = parser.format_teacher_schedule_for_telegram("Kulakova Dariya", day_index=0)
+    print("--- Сообщение: Расписание учителя с классами и кабинетами ---")
+    print(msg_teacher_sched[:220] + "...\n")
 
     print("=" * 65)
-    print("🎉 ВСЕ ТЕСТЫ ПАРСЕРА И МОДУЛЕЙ УСПЕШНО ПРОЙДЕНЫ!")
+    print("🎉 ВСЕ ТЕСТЫ БОТА, ПАРСЕРА, ПОДГРУПП И АДМИН-ПАНЕЛИ УСПЕШНО ПРОЙДЕНЫ!")
     print("=" * 65)
 
 if __name__ == "__main__":
