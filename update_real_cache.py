@@ -9,7 +9,10 @@ def normalize_class_name(class_name: str) -> str:
     if not class_name:
         return ""
     name = class_name.strip().upper()
-    ru_to_en = {"А": "A", "В": "B", "С": "C", "Е": "E", "К": "K"}
+    ru_to_en = {
+        "А": "A", "Б": "B", "В": "B", "С": "C", "Е": "E",
+        "К": "K", "Л": "L", "П": "P"
+    }
     for r, e in ru_to_en.items():
         name = name.replace(r, e)
     name = re.sub(r'(\d+)\s+([A-ZА-ЯЁ])', r'\1\2', name)
@@ -143,24 +146,28 @@ def build_cache_from_raw():
             deduped_gnames = list(dict.fromkeys(gnames))
             group_str = ", ".join(deduped_gnames)
 
-            period_num = int(card.get("period", 1))
-            period_info = periods_dict.get(str(period_num), {})
-            starttime = period_info.get("starttime", "")
-            endtime = period_info.get("endtime", "")
-
-            card_data = {
-                "period": period_num,
-                "time": f"{starttime}-{endtime}" if starttime else "",
-                "subject": subject_name,
-                "teachers": teacher_names,
-                "classrooms": room_names,
-                "group": group_str
-            }
-
+            base_period_num = int(card.get("period", 1))
+            duration = int(lesson.get("durationperiods") or 1)
             days_str = card.get("days", "")
-            for d_idx, char in enumerate(days_str):
-                if char == "1" and d_idx < 5:
-                    schedule_by_class[c_name][d_idx].setdefault(period_num, []).append(card_data)
+
+            for offset in range(duration):
+                period_num = base_period_num + offset
+                period_info = periods_dict.get(str(period_num), {})
+                starttime = period_info.get("starttime", "")
+                endtime = period_info.get("endtime", "")
+
+                card_data = {
+                    "period": period_num,
+                    "time": f"{starttime}-{endtime}" if starttime else "",
+                    "subject": subject_name,
+                    "teachers": teacher_names,
+                    "classrooms": room_names,
+                    "group": group_str
+                }
+
+                for d_idx, char in enumerate(days_str):
+                    if char == "1" and d_idx < 5:
+                        schedule_by_class[c_name][d_idx].setdefault(period_num, []).append(card_data)
 
     timetable_cache = {
         "periods": periods_dict,

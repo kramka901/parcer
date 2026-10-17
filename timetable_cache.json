@@ -3421,6 +3421,32 @@
             "group": "Poisid"
           }
         ],
+        "3": [
+          {
+            "period": 3,
+            "time": "10:35-11:20",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Velbri Külli"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          },
+          {
+            "period": 3,
+            "time": "10:35-11:20",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Talve Tõnu"
+            ],
+            "classrooms": [
+              "007"
+            ],
+            "group": "Poisid"
+          }
+        ],
         "4": [
           {
             "period": 4,
@@ -3771,6 +3797,32 @@
           {
             "period": 4,
             "time": "11:45-12:30",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Talve Tõnu"
+            ],
+            "classrooms": [
+              "007"
+            ],
+            "group": "Poisid"
+          }
+        ],
+        "5": [
+          {
+            "period": 5,
+            "time": "12:55-13:40",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Velbri Külli"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          },
+          {
+            "period": 5,
+            "time": "12:55-13:40",
             "subject": "Käsitöö/kodundus/tehnoloogia",
             "teachers": [
               "Talve Tõnu"
@@ -4561,6 +4613,32 @@
             "group": "Tüdrukud"
           }
         ],
+        "6": [
+          {
+            "period": 6,
+            "time": "13:50-14:35",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Talve Tõnu"
+            ],
+            "classrooms": [
+              "007"
+            ],
+            "group": "Poisid"
+          },
+          {
+            "period": 6,
+            "time": "13:50-14:35",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Velbri Külli"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          }
+        ],
         "1": [
           {
             "period": 1,
@@ -4953,6 +5031,32 @@
           {
             "period": 3,
             "time": "10:35-11:20",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Velbri Külli"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          }
+        ],
+        "4": [
+          {
+            "period": 4,
+            "time": "11:45-12:30",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Talve Tõnu"
+            ],
+            "classrooms": [
+              "007"
+            ],
+            "group": "Poisid"
+          },
+          {
+            "period": 4,
+            "time": "11:45-12:30",
             "subject": "Käsitöö/kodundus/tehnoloogia",
             "teachers": [
               "Velbri Külli"
@@ -5427,6 +5531,32 @@
           {
             "period": 3,
             "time": "10:35-11:20",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Velbri Külli"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          }
+        ],
+        "4": [
+          {
+            "period": 4,
+            "time": "11:45-12:30",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Talve Tõnu"
+            ],
+            "classrooms": [
+              "007"
+            ],
+            "group": "Poisid"
+          },
+          {
+            "period": 4,
+            "time": "11:45-12:30",
             "subject": "Käsitöö/kodundus/tehnoloogia",
             "teachers": [
               "Velbri Külli"
@@ -8283,6 +8413,32 @@
             "group": "Poisid"
           }
         ],
+        "2": [
+          {
+            "period": 2,
+            "time": "09:25-10:10",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Jurkina Tatjana"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          },
+          {
+            "period": 2,
+            "time": "09:25-10:10",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Tesla Aleksander"
+            ],
+            "classrooms": [
+              "001"
+            ],
+            "group": "Poisid"
+          }
+        ],
         "4": [
           {
             "period": 4,
@@ -8811,6 +8967,32 @@
           {
             "period": 3,
             "time": "10:35-11:20",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Jurkina Tatjana"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          }
+        ],
+        "4": [
+          {
+            "period": 4,
+            "time": "11:45-12:30",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Tesla Aleksander"
+            ],
+            "classrooms": [
+              "001"
+            ],
+            "group": "Poisid"
+          },
+          {
+            "period": 4,
+            "time": "11:45-12:30",
             "subject": "Käsitöö/kodundus/tehnoloogia",
             "teachers": [
               "Jurkina Tatjana"
@@ -9819,6 +10001,32 @@
             "group": "Poisid"
           }
         ],
+        "6": [
+          {
+            "period": 6,
+            "time": "13:50-14:35",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Jurkina Tatjana"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          },
+          {
+            "period": 6,
+            "time": "13:50-14:35",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Tesla Aleksander"
+            ],
+            "classrooms": [
+              "001"
+            ],
+            "group": "Poisid"
+          }
+        ],
         "7": [
           {
             "period": 7,
@@ -10589,6 +10797,32 @@
           {
             "period": 3,
             "time": "10:35-11:20",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Jurkina Tatjana"
+            ],
+            "classrooms": [
+              "005-1"
+            ],
+            "group": "Tüdrukud"
+          }
+        ],
+        "4": [
+          {
+            "period": 4,
+            "time": "11:45-12:30",
+            "subject": "Käsitöö/kodundus/tehnoloogia",
+            "teachers": [
+              "Tesla Aleksander"
+            ],
+            "classrooms": [
+              "001"
+            ],
+            "group": "Poisid"
+          },
+          {
+            "period": 4,
+            "time": "11:45-12:30",
             "subject": "Käsitöö/kodundus/tehnoloogia",
             "teachers": [
               "Jurkina Tatjana"
@@ -12697,6 +12931,20 @@
             "group": ""
           }
         ],
+        "7": [
+          {
+            "period": 7,
+            "time": "14:40-15:25",
+            "subject": "Majandus ja ettevõtlusõpetus",
+            "teachers": [
+              "Korzoun Tatiana"
+            ],
+            "classrooms": [
+              "306"
+            ],
+            "group": ""
+          }
+        ],
         "1": [
           {
             "period": 1,
@@ -13129,6 +13377,20 @@
           {
             "period": 3,
             "time": "10:35-11:20",
+            "subject": "Projektijuhtimine",
+            "teachers": [
+              "Korzoun Tatiana"
+            ],
+            "classrooms": [
+              "001"
+            ],
+            "group": ""
+          }
+        ],
+        "4": [
+          {
+            "period": 4,
+            "time": "11:45-12:30",
             "subject": "Projektijuhtimine",
             "teachers": [
               "Korzoun Tatiana"
@@ -13773,6 +14035,20 @@
           {
             "period": 7,
             "time": "14:40-15:25",
+            "subject": "Projektijuhtimine",
+            "teachers": [
+              "Korzoun Tatiana"
+            ],
+            "classrooms": [
+              "001"
+            ],
+            "group": ""
+          }
+        ],
+        "8": [
+          {
+            "period": 8,
+            "time": "15:30-16:15",
             "subject": "Projektijuhtimine",
             "teachers": [
               "Korzoun Tatiana"
@@ -15589,6 +15865,20 @@
             "group": ""
           }
         ],
+        "7": [
+          {
+            "period": 7,
+            "time": "14:40-15:25",
+            "subject": "Kirjandus",
+            "teachers": [
+              "Rajalo Henn"
+            ],
+            "classrooms": [
+              "312"
+            ],
+            "group": ""
+          }
+        ],
         "5": [
           {
             "period": 5,
@@ -16161,6 +16451,20 @@
           {
             "period": 4,
             "time": "11:45-12:30",
+            "subject": "Kirjandus",
+            "teachers": [
+              "Rajalo Henn"
+            ],
+            "classrooms": [
+              "312"
+            ],
+            "group": ""
+          }
+        ],
+        "5": [
+          {
+            "period": 5,
+            "time": "12:55-13:40",
             "subject": "Kirjandus",
             "teachers": [
               "Rajalo Henn"

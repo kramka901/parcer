@@ -663,6 +663,8 @@ async def safe_reply(update: Update, text: str, reply_markup=None):
             else:
                 await target.reply_text(chunk, parse_mode=ParseMode.MARKDOWN, reply_markup=mk)
         except Exception as e:
+            if "Message is not modified" in str(e):
+                return
             logger.warning(f"Ошибка Markdown: {e}. Отправка в обычном тексте.")
             try:
                 if update.callback_query and i == 0:
@@ -670,6 +672,8 @@ async def safe_reply(update: Update, text: str, reply_markup=None):
                 else:
                     await target.reply_text(chunk, reply_markup=mk)
             except Exception as e2:
+                if "Message is not modified" in str(e2):
+                    return
                 logger.error(f"Не удалось отправить сообщение: {e2}")
 
 

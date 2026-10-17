@@ -64,6 +64,40 @@ def format_group_label(group_name: str) -> str:
     return " ".join(deduped)
 
 
+def parse_period_numbers(period_str: str) -> List[int]:
+    """
+    Разбирает строку с номерами уроков в список чисел:
+    '3' -> [3]
+    '(7)' -> [7]
+    '3 - 4' -> [3, 4]
+    '2-3' -> [2, 3]
+    '3, 4' -> [3, 4]
+    '' -> []
+    """
+    if not period_str:
+        return []
+    s = str(period_str).strip().strip("()")
+    if not s:
+        return []
+    range_match = re.match(r"^(\d+)\s*[-–—]\s*(\d+)$", s)
+    if range_match:
+        start_p = int(range_match.group(1))
+        end_p = int(range_match.group(2))
+        if start_p <= end_p:
+            return list(range(start_p, end_p + 1))
+        return [start_p, end_p]
+    if "," in s:
+        res = []
+        for part in s.split(","):
+            part_s = part.strip()
+            if part_s.isdigit():
+                res.append(int(part_s))
+        return res
+    if s.isdigit():
+        return [int(s)]
+    return []
+
+
 def should_show_card(card: Dict[str, Any], subgroup_filter: Optional[Dict[str, str]]) -> bool:
     """Проверяет, подходит ли урок под выбранные пользователем подгруппы"""
     if not subgroup_filter:
@@ -78,19 +112,19 @@ def should_show_card(card: Dict[str, Any], subgroup_filter: Optional[Dict[str, s
     # Фильтр по полу (физкультура и т.п.)
     gender_filter = subgroup_filter.get("gender")
     if gender_filter == "boys":
-        if "tüdrukud" in group_low or "tudrukud" in group_low:
+        if any(w in group_low for w in ["tüdrukud", "tudrukud", "девочк", "девочки"]):
             return False
     elif gender_filter == "girls":
-        if "poisid" in group_low:
+        if any(w in group_low for w in ["poisid", "мальчик", "мальчики"]):
             return False
 
     # Фильтр по академическим/языковым группам (1 группа / 2 группа)
     academic_filter = subgroup_filter.get("academic")
     if academic_filter in ("1", "group1"):
-        if "rühm 2" in group_low or "grupp 2" in group_low:
+        if any(w in group_low for w in ["rühm 2", "grupp 2", "2. rühm", "2 grupp", "группа 2", "2 группа"]):
             return False
     elif academic_filter in ("2", "group2"):
-        if "rühm 1" in group_low or "grupp 1" in group_low:
+        if any(w in group_low for w in ["rühm 1", "grupp 1", "1. rühm", "1 grupp", "группа 1", "1 группа"]):
             return False
 
     return True
@@ -200,11 +234,14 @@ class MJGParser:
 
     @staticmethod
     def normalize_class_name(class_name: str) -> str:
-        """Приводит название класса к каноническому виду (например, '10 a' -> '10A', '7-8e' -> '7-8E')"""
+        """Приводит название класса к каноническому виду (например, '10 a' -> '10A', '7-8e' -> '7-8E', '6б' -> '6B')"""
         if not class_name:
             return ""
         name = class_name.strip().upper()
-        ru_to_en = {"А": "A", "В": "B", "С": "C", "Е": "E", "К": "K"}
+        ru_to_en = {
+            "А": "A", "Б": "B", "В": "B", "С": "C", "Е": "E",
+            "К": "K", "Л": "L", "П": "P"
+        }
         for r, e in ru_to_en.items():
             name = name.replace(r, e)
         name = re.sub(r'(\d+)\s+([A-ZА-ЯЁ])', r'\1\2', name)
@@ -238,6 +275,20 @@ class MJGParser:
         q_translit = self.transliterate_ru_to_et(q)
         teachers = self.get_teachers()
 
+        def clean_key(s: str) -> str:
+            s = s.lower().strip()
+            s = s.replace('õ', 'y').replace('ä', 'a').replace('ö', 'o').replace('ü', 'u')
+            s = re.sub(r'^ju', 'u', s)            # juksiratsa -> uksiratsa
+            s = re.sub(r'([aeouy])j(?=[^aeiouy]|$)', r'\1i', s)  # lajne -> laine
+            s = s.replace('ž', 'z').replace('š', 's')
+            s = s.replace('c', 'k')
+            s = s.replace('j', 'z')
+            s = re.sub(r'(.)\1+', r'\1', s)  # collapse double letters (e.g. ss -> s, ll -> l)
+            return s
+
+        q_clean = clean_key(q)
+        q_translit_clean = clean_key(q_translit)
+
         # 1. Точное совпадение с полным именем
         for t_name in teachers.keys():
             t_low = t_name.lower()
@@ -256,11 +307,19 @@ class MJGParser:
             if surname and (surname.startswith(q) or surname.startswith(q_translit)):
                 return t_name
 
+        # 4. Упрощенное фонетическое совпадение с фамилией
+        for t_name, info in teachers.items():
+            surname = info.get("surname", "")
+            sur_clean = clean_key(surname)
+            if sur_clean and (sur_clean == q_clean or sur_clean == q_translit_clean or
+                              sur_clean.startswith(q_clean) or sur_clean.startswith(q_translit_clean) or
+                              q_clean in sur_clean or q_translit_clean in sur_clean):
+                return t_name
+
+        # 5. Совпадение по полному имени
         for t_name in teachers.keys():
-            t_low = t_name.lower()
-            t_simplified = t_low.replace('ž', 'z').replace('š', 's').replace('õ', 'o').replace('ä', 'a').replace('ö', 'o').replace('ü', 'u')
-            q_simplified = q_translit.replace('ž', 'z').replace('š', 's').replace('õ', 'o').replace('ä', 'a').replace('ö', 'o').replace('ü', 'u')
-            if q in t_low or q_translit in t_low or q_simplified in t_simplified:
+            t_clean = clean_key(t_name)
+            if q_clean in t_clean or q_translit_clean in t_clean:
                 return t_name
 
         return None
@@ -471,24 +530,28 @@ class MJGParser:
                             deduped_gnames = list(dict.fromkeys(gnames))
                             group_str = ", ".join(deduped_gnames)
 
-                            period_num = int(card.get("period", 1))
-                            period_info = periods_dict.get(str(period_num), {})
-                            starttime = period_info.get("starttime", "")
-                            endtime = period_info.get("endtime", "")
-
-                            card_data = {
-                                "period": period_num,
-                                "time": f"{starttime}-{endtime}" if starttime else "",
-                                "subject": subject_name,
-                                "teachers": teacher_names,
-                                "classrooms": room_names,
-                                "group": group_str
-                            }
-
+                            base_period_num = int(card.get("period", 1))
+                            duration = int(lesson.get("durationperiods") or 1)
                             days_str = card.get("days", "")
-                            for d_idx, char in enumerate(days_str):
-                                if char == "1" and d_idx < 5:
-                                    schedule_by_class[c_name][d_idx].setdefault(period_num, []).append(card_data)
+
+                            for offset in range(duration):
+                                period_num = base_period_num + offset
+                                period_info = periods_dict.get(str(period_num), {})
+                                starttime = period_info.get("starttime", "")
+                                endtime = period_info.get("endtime", "")
+
+                                card_data = {
+                                    "period": period_num,
+                                    "time": f"{starttime}-{endtime}" if starttime else "",
+                                    "subject": subject_name,
+                                    "teachers": teacher_names,
+                                    "classrooms": room_names,
+                                    "group": group_str
+                                }
+
+                                for d_idx, char in enumerate(days_str):
+                                    if char == "1" and d_idx < 5:
+                                        schedule_by_class[c_name][d_idx].setdefault(period_num, []).append(card_data)
 
                     self._classes_cache = classes_dict
                     self._teachers_cache = teachers_dict
@@ -808,18 +871,20 @@ class MJGParser:
         subst_res = self.get_substitutions(date_str=date_str, class_name=norm_class)
         subst_items = subst_res.get("substitutions", [])
 
-        subst_by_period: Dict[str, List[Dict[str, Any]]] = {}
+        subst_by_period: Dict[int, List[Dict[str, Any]]] = {}
+        whole_day_subst = []
         for item in subst_items:
-            p_str = item["period"].strip("()")
-            subst_by_period.setdefault(p_str, []).append(item)
+            p_nums = parse_period_numbers(item.get("period", ""))
+            if p_nums:
+                for p in p_nums:
+                    subst_by_period.setdefault(p, []).append(item)
+            else:
+                whole_day_subst.append(item)
 
         periods_info = self.get_regular_timetable().get("periods", {})
         combined_lessons = []
 
-        all_periods = set(day_sched.keys())
-        for p_str in subst_by_period.keys():
-            if p_str.isdigit():
-                all_periods.add(int(p_str))
+        all_periods = set(day_sched.keys()) | set(subst_by_period.keys())
 
         for p_num in sorted(all_periods):
             p_str = str(p_num)
@@ -827,7 +892,7 @@ class MJGParser:
             time_str = f"{p_info.get('starttime', '')}-{p_info.get('endtime', '')}" if p_info.get("starttime") else ""
 
             reg_cards = day_sched.get(p_num, [])
-            subst_for_p = subst_by_period.get(p_str, [])
+            subst_for_p = subst_by_period.get(p_num, [])
 
             combined_lessons.append({
                 "period": p_num,
@@ -835,8 +900,6 @@ class MJGParser:
                 "regular": reg_cards,
                 "substitutions": subst_for_p
             })
-
-        whole_day_subst = [item for item in subst_items if not item["period"].strip("()").isdigit()]
 
         return {
             "is_weekend": False,
@@ -879,18 +942,20 @@ class MJGParser:
         t_subst = self.get_teacher_substitutions(norm_t, date_str=date_str)
         subst_items = t_subst.get("substitutions", [])
 
-        subst_by_p: Dict[str, List[Dict[str, Any]]] = {}
+        subst_by_p: Dict[int, List[Dict[str, Any]]] = {}
+        whole_day_t_subst = []
         for s in subst_items:
-            p_str = s["period"].strip("()")
-            subst_by_p.setdefault(p_str, []).append(s)
+            p_nums = parse_period_numbers(s.get("period", ""))
+            if p_nums:
+                for p in p_nums:
+                    subst_by_p.setdefault(p, []).append(s)
+            else:
+                whole_day_t_subst.append(s)
 
         periods_info = self.get_regular_timetable().get("periods", {})
         combined = []
 
-        all_p = set(day_lessons.keys())
-        for p_str in subst_by_p.keys():
-            if p_str.isdigit():
-                all_p.add(int(p_str))
+        all_p = set(day_lessons.keys()) | set(subst_by_p.keys())
 
         for p_num in sorted(all_p):
             p_str = str(p_num)
@@ -901,7 +966,7 @@ class MJGParser:
                 "period": p_num,
                 "time": time_str,
                 "regular": day_lessons.get(p_num, []),
-                "substitutions": subst_by_p.get(p_str, [])
+                "substitutions": subst_by_p.get(p_num, [])
             })
 
         return {
@@ -911,6 +976,7 @@ class MJGParser:
             "weekday_index": weekday,
             "weekday_name": WEEKDAYS_RU[weekday],
             "lessons": combined,
+            "whole_day_substitutions": whole_day_t_subst,
             "has_substitutions": len(subst_items) > 0
         }
 
