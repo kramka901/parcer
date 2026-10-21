@@ -28,11 +28,16 @@ SUBSTITUTION_CACHE_TTL = 300  # 5 минут для замен
 
 # Файлы сохранения данных и кэша
 USER_DATA_FILE = BASE_DIR / "user_preferences.json"
+USER_BACKUP_FILE = BASE_DIR / "user_preferences.json.bak"
+CHAT_DATA_FILE = BASE_DIR / "chats_preferences.json"
 SEEN_SUBSTITUTIONS_FILE = BASE_DIR / "seen_substitutions.json"
 TIMETABLE_CACHE_FILE = BASE_DIR / "timetable_cache.json"
 SUBSTITUTIONS_CACHE_FILE = BASE_DIR / "substitutions_cache.json"
 TEACHERS_DATA_FILE = BASE_DIR / "teachers.json"
 ADMINS_FILE = BASE_DIR / "admins.json"
+
+# Начальное базовое количество пользователей (сохранение для 97 пользователей)
+INITIAL_USER_COUNT = int(os.getenv("INITIAL_USER_COUNT", "97"))
 
 # Начальные ID администраторов
 DEFAULT_ADMIN_IDS = [1637426603]

@@ -1111,5 +1111,201 @@
       ]
     },
     "date": "2026-10-01"
+  },
+  "2026-10-21": {
+    "timestamp": 1792611685.349166,
+    "data": {
+      "10A": [
+        {
+          "period": "1",
+          "info": "Matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Volossova Olga",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Poisid: Kehaline kasvatus - (Voskoboinikov Vladimir)",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Tüdrukud: Kehaline kasvatus - (Trjapitškina Jekaterina)",
+          "type": "change"
+        }
+      ],
+      "10B": [
+        {
+          "period": "4",
+          "info": "Rühm 2: Inglise keel - Õpetaja: Korzoun Tatiana, Vaheta ruumi: (301) ➔ 105",
+          "type": "change"
+        },
+        {
+          "period": "(7)",
+          "info": "Poisid: Kehaline kasvatus - Voskoboinikov Vladimir, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "(7)",
+          "info": "Tüdrukud: Kehaline kasvatus - Trjapitškina Jekaterina, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "10C": [
+        {
+          "period": "(1)",
+          "info": "Rühm 2: Tehisintellekti teadlik kasutamine ja digipädevus - Bondaruk Aleksandra, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "2",
+          "info": "Rühm 1: Inglise keel - Asendused: (Ilnitskaja Olga) ➔ Korzoun Tatiana, Vaheta ruumi: (314) ➔ 204",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Rühm 1: Tehisintellekti teadlik kasutamine ja digipädevus - Asendused: (Bondaruk Aleksandra) ➔ Korzoun Tatiana, Vaheta ruumi: (308) ➔ 204",
+          "type": "change"
+        },
+        {
+          "period": "(7)",
+          "info": "Rühm 1: Inglise keel - Ilnitskaja Olga, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "11A": [
+        {
+          "period": "(1)",
+          "info": "Rühm 1: Eesti keel teise keelena - Lind Valeri, Moved to period: 4",
+          "type": "remove"
+        },
+        {
+          "period": "(1)",
+          "info": "Rühm 2: Eesti keel teise keelena - Soopalu Kristi, Moved to period: 4",
+          "type": "remove"
+        },
+        {
+          "period": "4",
+          "info": "Rühm 1: Eesti keel teise keelena - Moved from period: 1, Õpetaja: Lind Valeri",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Rühm 2: Eesti keel teise keelena - Moved from period: 1, Õpetaja: Soopalu Kristi",
+          "type": "change"
+        },
+        {
+          "period": "(4)",
+          "info": "Matemaatika - Jasjukevitš Oksana, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "11B": [
+        {
+          "period": "4",
+          "info": "Poisid: Kehaline kasvatus - Asendused: (Voskoboinikov Vladimir) ➔ Kivimets Raiko",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Kivimets Raiko",
+          "type": "change"
+        }
+      ],
+      "11C": [
+        {
+          "period": "(1)",
+          "info": "Tüdrukud: Kehaline kasvatus - Trjapitškina Jekaterina, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "12A": [
+        {
+          "period": "4",
+          "info": "Rühm 2: Inglise keel - Asendused: (Ilnitskaja Olga) ➔ Krõlatov Pavel, Vaheta ruumi: (314) ➔ 208",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Rühm 1: Inglise keel - Õpetaja: Krõlatov Pavel, Vaheta ruumi: (105) ➔ 208",
+          "type": "change"
+        }
+      ],
+      "12B": [
+        {
+          "period": "(1)",
+          "info": "Rühm 2: Inglise keel - Ilnitskaja Olga, Tühistatud",
+          "type": "remove"
+        },
+        {
+          "period": "2",
+          "info": "Matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Maksimova Margarita",
+          "type": "change"
+        }
+      ],
+      "12C": [
+        {
+          "period": "2",
+          "info": "Rühm 2: Tehisintellekti teadlik kasutamine ja digipädevus - Asendused: (Bondaruk Aleksandra) ➔ Krõlatov Pavel, Vaheta ruumi: (308) ➔ 105",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Rühm 2: Inglise keel - Asendused: (Ilnitskaja Olga) ➔ Krõlatov Pavel, Vaheta ruumi: (314) ➔ 105",
+          "type": "change"
+        }
+      ],
+      "1E": [
+        {
+          "period": "1",
+          "info": "Eesti keel teise keelena - Asendused: (Velbri Külli) ➔ Rogovitskaja Jelena",
+          "type": "change"
+        },
+        {
+          "period": "2",
+          "info": "Matemaatika - Asendused: (Velbri Külli) ➔ Vannik Marina",
+          "type": "change"
+        },
+        {
+          "period": "3",
+          "info": "Eesti keel teise keelena - Asendused: (Velbri Külli) ➔ Marmor Irene",
+          "type": "change"
+        }
+      ],
+      "4A": [
+        {
+          "period": "5",
+          "info": "Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Kulagina Margarita, Vaheta ruumi: (Võimla) ➔ 116",
+          "type": "change"
+        }
+      ],
+      "5A": [
+        {
+          "period": "1",
+          "info": "Kehaline kasvatus - Asendused: (Voskoboinikov Vladimir) ➔ Kivimets Raiko",
+          "type": "change"
+        }
+      ],
+      "7-8E": [
+        {
+          "period": "(7)",
+          "info": "Rühm 2, 8E: Informaatika - Jasjukevitš Oksana, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "8A": [
+        {
+          "period": "2",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Voskoboinikov Vladimir) ➔ Kivimets Raiko",
+          "type": "change"
+        }
+      ],
+      "8K": [
+        {
+          "period": "(7)",
+          "info": "Rühm 2, 8E: Informaatika - Jasjukevitš Oksana, Tühistatud",
+          "type": "remove"
+        }
+      ]
+    },
+    "date": "2026-10-21"
   }
 }

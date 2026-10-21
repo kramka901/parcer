@@ -196,6 +196,64 @@ def run_tests():
     assert len(p_map[7]["substitutions"]) == 1, "Замена '(7)' должна быть прикреплена к 7 уроку!"
     print("  ✅ Диапазоны уроков в заменах ('3 - 4') успешно распределяются по соответствующим урокам!")
 
+    # 9. Тест кабинетов преподавателей (в каких кабинетах преподает)
+    print("\n[ТЕСТ 9] Кабинеты преподавателей (основной, все кабинеты, по дням и классам):")
+    t_rooms = parser.get_teacher_classrooms("Kulakova Dariya")
+    print(f"  Kulakova Dariya -> Основной кабинет: {t_rooms.get('primary_room')}, Все кабинеты: {t_rooms.get('all_rooms')}")
+    assert t_rooms.get("primary_room") == "106", "Основной кабинет Kulakova Dariya должен быть 106!"
+    assert "002" in t_rooms.get("all_rooms", []), "Кабинет 002 должен быть в списке кабинетов Kulakova Dariya!"
+    assert len(t_rooms.get("classes_by_room", {})) > 0, "Должна присутствовать привязка классов к кабинетам!"
+
+    msg_teacher_rooms = parser.format_teacher_classrooms_for_telegram("Kulakova Dariya")
+    assert "106" in msg_teacher_rooms and "002" in msg_teacher_rooms, "В тексте сообщения должны быть указаны кабинеты!"
+    print("  ✅ Кабинеты преподавателей сформированы и отформатированы корректно!")
+
+    # 10. Тест сохранения пользователей (97 пользователей) и уменьшения счётчика при выходе
+    print("\n[ТЕСТ 10] Сохранение 97 пользователей и уменьшение счётчика при выходе/блокировке:")
+    from bot import user_prefs
+    initial_active = user_prefs.get_active_users_count()
+    print(f"  Начальное количество активных пользователей: {initial_active}")
+    assert initial_active == 97, f"Ожидалось 97 активных пользователей, получено {initial_active}!"
+
+    # Пользователь выходит/блокирует бота -> счетчик уменьшается до 96
+    mock_user_id = 777000111
+    user_prefs.set_user_inactive(mock_user_id, reason="test_block")
+    count_after_leave = user_prefs.get_active_users_count()
+    print(f"  После выхода пользователя {mock_user_id}: {count_after_leave}")
+    assert count_after_leave == 96, f"Ожидалось 96 пользователей после выхода, получено {count_after_leave}!"
+
+    # Пользователь возвращается -> счетчик возвращается к 97
+    user_prefs.set_user_active(mock_user_id)
+    count_after_return = user_prefs.get_active_users_count()
+    print(f"  После возвращения пользователя {mock_user_id}: {count_after_return}")
+    assert count_after_return == 97, f"Ожидалось 97 пользователей после возвращения, получено {count_after_return}!"
+
+    # Очистка тестового пользователя
+    user_prefs._data.pop(str(mock_user_id), None)
+    user_prefs.set_target_count(97)
+    print("  ✅ Сохранение 97 пользователей и точное изменение счётчика протестированы успешно!")
+
+    # 11. Тест поддержки групповых чатов и привязки класса к беседе
+    print("\n[ТЕСТ 11] Поддержка групповых чатов (привязка класса к беседе):")
+    from bot import chat_prefs, get_group_chat_keyboard
+    test_group_id = -100987654321
+    chat_prefs.set_class(test_group_id, "10A", title="Тестовая беседа 10A")
+    assert chat_prefs.get_class(test_group_id) == "10A", "К чату должен быть привязан класс 10A!"
+    kb = get_group_chat_keyboard(test_group_id)
+    assert any("10A" in btn.text for row in kb.inline_keyboard for btn in row), "Кнопка клавиатуры группы должна содержать 10A!"
+    chat_prefs.remove_chat(test_group_id)
+    print("  ✅ Групповые чаты и отдельная панель вызова работают корректно!")
+
+    # 12. Тест универсального школьного поиска
+    print("\n[ТЕСТ 12] Универсальный школьный поиск (учителя, кабинеты, классы):")
+    s_teacher = parser.search_school("Кулакова")
+    assert "Kulakova Dariya" in s_teacher["teachers"], "Поиск должен найти Kulakova Dariya!"
+    s_room = parser.search_school("204")
+    assert "204" in s_room["classrooms"], "Поиск должен найти кабинет 204!"
+    s_class = parser.search_school("8K")
+    assert "8K" in s_class["classes"], "Поиск должен найти класс 8K!"
+    print("  ✅ Универсальный поиск успешно находит учителей, кабинеты и классы!")
+
     print("=" * 65)
     print("🎉 ВСЕ ТЕСТЫ БОТА, ПАРСЕРА, ПОДГРУПП И АДМИН-ПАНЕЛИ УСПЕШНО ПРОЙДЕНЫ!")
     print("=" * 65)

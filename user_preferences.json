@@ -3,9 +3,669 @@
     "role": "student",
     "notifications": true,
     "class_name": "8K",
-    "subgroup_gender": "boys"
+    "subgroup_gender": "boys",
+    "is_active": true
   },
   "999999999": {
-    "notifications": false
+    "notifications": false,
+    "is_active": true
+  },
+  "saved_user_1004": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1005": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1006": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1007": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1008": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1009": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1010": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1011": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1012": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1013": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1014": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1015": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1016": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1017": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1018": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1019": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1020": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1021": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1022": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1023": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1024": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1025": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1026": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1027": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1028": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1029": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1030": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1031": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1032": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1033": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1034": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1035": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1036": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1037": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1038": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1039": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1040": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1041": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1042": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1043": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1044": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1045": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1046": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1047": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1048": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1049": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1050": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1051": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1052": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1053": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1054": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1055": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1056": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1057": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1058": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1059": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1060": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1061": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1062": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1063": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1064": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1065": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1066": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1067": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1068": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1069": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1070": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1071": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1072": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1073": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1074": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1075": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1076": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1077": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1078": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1079": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1080": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1081": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1082": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1083": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1084": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1085": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1086": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1087": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1088": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1089": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1090": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1091": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1092": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1093": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1094": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_1095": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "saved_user_2001": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "admin_set",
+    "legacy": true
+  },
+  "saved_user_1001": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
   }
 }

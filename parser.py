@@ -676,6 +676,317 @@ class MJGParser:
             return {day_index: teacher_schedule.get(day_index, {})}
         return teacher_schedule
 
+    # ================= Кабинеты преподавателей и школы =================
+
+    def get_teacher_classrooms(self, teacher_name: str) -> Dict[str, Any]:
+        """
+        Возвращает информацию о кабинетах преподавателя:
+        - primary_room: основной (наиболее частый) кабинет
+        - all_rooms: список всех кабинетов, где преподает учитель
+        - room_counts: статистика по кабинетам {кабинет: число уроков}
+        - by_day: кабинеты по дням недели
+        - classes_by_room: какие классы учит в каком кабинете
+        - subjects_by_room: какие предметы ведёт в каком кабинете
+        """
+        norm_t = self.normalize_teacher_name(teacher_name) or teacher_name
+        sched = self.get_teacher_schedule(norm_t)
+
+        room_counts: Dict[str, int] = {}
+        by_day: Dict[int, List[str]] = {d: [] for d in range(5)}
+        classes_by_room: Dict[str, Set[str]] = {}
+        subjects_by_room: Dict[str, Set[str]] = {}
+
+        for d_int, periods in sched.items():
+            day_rooms = set()
+            for p_int, cards in periods.items():
+                for card in cards:
+                    c_name = card.get("class_name", "")
+                    subj = card.get("subject", "")
+                    for r in card.get("classrooms", []):
+                        r_str = str(r).strip()
+                        if r_str:
+                            room_counts[r_str] = room_counts.get(r_str, 0) + 1
+                            day_rooms.add(r_str)
+                            if c_name:
+                                classes_by_room.setdefault(r_str, set()).add(c_name)
+                            if subj:
+                                subjects_by_room.setdefault(r_str, set()).add(subj)
+            by_day[d_int] = sorted(list(day_rooms))
+
+        all_rooms = sorted(list(room_counts.keys()))
+        primary_room = None
+        if room_counts:
+            primary_room = max(room_counts.items(), key=lambda x: x[1])[0]
+
+        return {
+            "teacher_name": norm_t,
+            "primary_room": primary_room,
+            "all_rooms": all_rooms,
+            "room_counts": room_counts,
+            "by_day": by_day,
+            "classes_by_room": {k: sorted(list(v)) for k, v in classes_by_room.items()},
+            "subjects_by_room": {k: sorted(list(v)) for k, v in subjects_by_room.items()}
+        }
+
+    def get_all_teachers_classrooms(self) -> Dict[str, Dict[str, Any]]:
+        """Возвращает информацию о кабинетах всех преподавателей школы"""
+        teachers = self.get_teachers()
+        res = {}
+        for t_name in teachers.keys():
+            t_rooms = self.get_teacher_classrooms(t_name)
+            if t_rooms.get("all_rooms"):
+                res[t_name] = t_rooms
+        return res
+
+    def get_all_classrooms(self) -> List[str]:
+        """Возвращает отсортированный список всех кабинетов школы из расписания"""
+        tt = self.get_regular_timetable()
+        schedule_by_class = tt.get("schedule", {})
+        rooms = set()
+        for c_days in schedule_by_class.values():
+            for day_lessons in c_days.values():
+                for cards in day_lessons.values():
+                    for card in cards:
+                        for r in card.get("classrooms", []):
+                            r_str = str(r).strip()
+                            if r_str:
+                                rooms.add(r_str)
+        return sorted(list(rooms))
+
+    def get_classroom_schedule(self, room_query: str, day_index: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Возвращает расписание уроков в конкретном кабинете по дням недели.
+        room_schedule[day_idx][period_num] = list of lessons (class_name, subject, teachers, time, group)
+        """
+        norm_room = str(room_query).strip()
+        all_rooms = self.get_all_classrooms()
+        # Поиск точного или частичного совпадения кабинета
+        matched_room = None
+        for r in all_rooms:
+            if r.lower() == norm_room.lower():
+                matched_room = r
+                break
+        if not matched_room:
+            for r in all_rooms:
+                if norm_room.lower() in r.lower():
+                    matched_room = r
+                    break
+        if not matched_room:
+            matched_room = norm_room
+
+        tt = self.get_regular_timetable()
+        schedule_by_class = tt.get("schedule", {})
+
+        room_schedule: Dict[int, Dict[int, List[Dict[str, Any]]]] = {d: {} for d in range(5)}
+        teacher_counts: Dict[str, int] = {}
+
+        for c_name, class_days in schedule_by_class.items():
+            for d_key, day_lessons in class_days.items():
+                try:
+                    d_int = int(d_key)
+                except ValueError:
+                    continue
+                if d_int not in room_schedule:
+                    continue
+                if isinstance(day_lessons, dict):
+                    for p_key, cards in day_lessons.items():
+                        try:
+                            p_int = int(p_key)
+                        except ValueError:
+                            continue
+                        for card in cards:
+                            card_rooms = [str(r).lower() for r in card.get("classrooms", [])]
+                            if matched_room.lower() in card_rooms:
+                                lesson_copy = dict(card)
+                                lesson_copy["class_name"] = c_name
+                                room_schedule[d_int].setdefault(p_int, []).append(lesson_copy)
+                                for t in card.get("teachers", []):
+                                    teacher_counts[t] = teacher_counts.get(t, 0) + 1
+
+        top_teachers = sorted(teacher_counts.items(), key=lambda x: x[1], reverse=True)
+
+        if day_index is not None:
+            day_res = {day_index: room_schedule.get(day_index, {})}
+        else:
+            day_res = room_schedule
+
+        return {
+            "room_name": matched_room,
+            "schedule": day_res,
+            "top_teachers": [t[0] for t in top_teachers[:3]],
+            "total_lessons": sum(len(cards) for d in room_schedule.values() for cards in d.values())
+        }
+
+    def get_current_period(self, target_dt: Optional[datetime] = None) -> Tuple[Optional[int], str, Optional[int]]:
+        """
+        Определяет текущий или следующий урок по времени звонков MJG.
+        Возвращает: (current_period, status, next_period)
+        status: 'in_lesson', 'in_break', 'before_school', 'after_school'
+        """
+        if target_dt is None:
+            target_dt = datetime.now()
+
+        cur_min = target_dt.hour * 60 + target_dt.minute
+
+        tt = self.get_regular_timetable()
+        periods = tt.get("periods", {})
+
+        parsed_periods = []
+        for p_str, p_info in sorted(periods.items(), key=lambda x: int(x[0])):
+            st = p_info.get("starttime", "")
+            et = p_info.get("endtime", "")
+            if st and et:
+                s_parts = [int(x) for x in st.split(":")]
+                e_parts = [int(x) for x in et.split(":")]
+                s_min = s_parts[0] * 60 + s_parts[1]
+                e_min = e_parts[0] * 60 + e_parts[1]
+                parsed_periods.append((int(p_str), s_min, e_min, st, et))
+
+        if not parsed_periods:
+            return None, "unknown", None
+
+        # Проверяем, идет ли сейчас урок
+        for i, (p_num, s_min, e_min, st, et) in enumerate(parsed_periods):
+            if s_min <= cur_min <= e_min:
+                next_p = parsed_periods[i+1][0] if i+1 < len(parsed_periods) else None
+                return p_num, "in_lesson", next_p
+
+        # До уроков
+        if cur_min < parsed_periods[0][1]:
+            return None, "before_school", parsed_periods[0][0]
+
+        # После уроков
+        if cur_min > parsed_periods[-1][2]:
+            return None, "after_school", None
+
+        # Перемена между уроками
+        for i in range(len(parsed_periods) - 1):
+            cur_end = parsed_periods[i][2]
+            next_start = parsed_periods[i+1][1]
+            if cur_end < cur_min < next_start:
+                return parsed_periods[i][0], "in_break", parsed_periods[i+1][0]
+
+        return None, "unknown", None
+
+    def get_free_classrooms(
+        self,
+        day_index: Optional[int] = None,
+        period_num: Optional[int] = None,
+        target_time: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Возвращает список свободных кабинетов на указанный урок и день.
+        Если день или урок не указаны, определяются по текущему времени.
+        """
+        now = target_time or datetime.now()
+        if day_index is None:
+            day_index = now.weekday()
+
+        cur_p, status, next_p = self.get_current_period(now)
+
+        if period_num is None:
+            if status == "in_lesson" and cur_p:
+                period_num = cur_p
+            elif status == "in_break" and next_p:
+                period_num = next_p
+            elif status == "before_school" and next_p:
+                period_num = next_p
+            else:
+                period_num = 1
+
+        all_rooms = self.get_all_classrooms()
+        tt = self.get_regular_timetable()
+        schedule_by_class = tt.get("schedule", {})
+        periods_info = tt.get("periods", {})
+
+        p_info = periods_info.get(str(period_num), {})
+        time_str = f"{p_info.get('starttime', '')}-{p_info.get('endtime', '')}" if p_info.get("starttime") else ""
+
+        occupied_map: Dict[str, List[Dict[str, Any]]] = {}
+
+        for c_name, class_days in schedule_by_class.items():
+            day_lessons = class_days.get(day_index, {}) or class_days.get(str(day_index), {})
+            if isinstance(day_lessons, dict):
+                cards = day_lessons.get(period_num, []) or day_lessons.get(str(period_num), [])
+                for card in cards:
+                    for r in card.get("classrooms", []):
+                        r_str = str(r).strip()
+                        if r_str:
+                            occupied_map.setdefault(r_str, []).append({
+                                "class_name": c_name,
+                                "subject": card.get("subject", ""),
+                                "teachers": card.get("teachers", [])
+                            })
+
+        occupied_rooms = sorted(list(occupied_map.keys()))
+        free_rooms = [r for r in all_rooms if r not in occupied_map]
+
+        return {
+            "day_index": day_index,
+            "day_name": WEEKDAYS_RU[day_index] if 0 <= day_index < 5 else "Выходной",
+            "period_num": period_num,
+            "time_str": time_str,
+            "status": status,
+            "free_rooms": free_rooms,
+            "occupied_rooms": occupied_rooms,
+            "occupied_details": occupied_map,
+            "total_rooms": len(all_rooms)
+        }
+
+    def get_teacher_current_lesson(self, teacher_name: str, target_dt: Optional[datetime] = None) -> Dict[str, Any]:
+        """
+        Определяет, где сейчас находится учитель (кабинет, класс, урок) или когда следующий урок.
+        """
+        now = target_dt or datetime.now()
+        norm_t = self.normalize_teacher_name(teacher_name) or teacher_name
+        weekday = now.weekday()
+
+        if weekday >= 5:
+            return {
+                "teacher_name": norm_t,
+                "status": "weekend",
+                "message": "Сейчас выходной день. Уроков в школе нет."
+            }
+
+        cur_p, status, next_p = self.get_current_period(now)
+        sched = self.get_teacher_schedule(norm_t, day_index=weekday)
+        day_sched = sched.get(weekday, {}) if sched else {}
+
+        # Проверяем замены на сегодня
+        today_str = now.strftime("%Y-%m-%d")
+        t_subst = self.get_teacher_substitutions(norm_t, date_str=today_str).get("substitutions", [])
+        subst_by_p = {}
+        for s in t_subst:
+            p_nums = parse_period_numbers(s.get("period", ""))
+            for p in p_nums:
+                subst_by_p[p] = s
+
+        current_lesson = None
+        if cur_p and cur_p in day_sched:
+            current_lesson = day_sched[cur_p][0] if day_sched[cur_p] else None
+
+        current_subst = subst_by_p.get(cur_p) if cur_p else None
+
+        next_lesson = None
+        next_lesson_period = None
+        for p in sorted(day_sched.keys()):
+            if (cur_p and p > cur_p) or (not cur_p and status == "before_school"):
+                next_lesson = day_sched[p][0] if day_sched[p] else None
+                next_lesson_period = p
+                break
+
+        return {
+            "teacher_name": norm_t,
+            "weekday": weekday,
+            "time_now": now.strftime("%H:%M"),
+            "status": status,
+            "current_period": cur_p,
+            "current_lesson": current_lesson,
+            "current_subst": current_subst,
+            "next_period": next_lesson_period,
+            "next_lesson": next_lesson
+        }
+
     # ================= Замены (Substitutions) =================
 
     def get_substitutions(
@@ -1129,14 +1440,26 @@ class MJGParser:
 
         return "\n".join(lines).strip()
 
-    # ================= Форматирование для Telegram (Учителя) =================
+    # ================= Форматирование для Telegram (Учителя и Кабинеты) =================
 
     def format_teacher_schedule_for_telegram(self, teacher_name: str, day_index: Optional[int] = None) -> str:
         """Форматирует расписание уроков преподавателя на неделю с указанием классов и кабинетов"""
         norm_t = self.normalize_teacher_name(teacher_name) or teacher_name
         sched = self.get_teacher_schedule(norm_t)
+        rooms_info = self.get_teacher_classrooms(norm_t)
 
-        lines = [f"👩‍🏫 *Расписание преподавателя: {norm_t}*\n"]
+        lines = [f"👩‍🏫 *Расписание преподавателя: {norm_t}*"]
+        prim_r = rooms_info.get("primary_room")
+        all_r = rooms_info.get("all_rooms", [])
+        other_r = [r for r in all_r if r != prim_r]
+
+        if prim_r and other_r:
+            lines.append(f"🚪 *Кабинеты преподавания:* *{prim_r}* (основной), {', '.join(other_r)}\n")
+        elif prim_r:
+            lines.append(f"🚪 *Основной кабинет:* *{prim_r}*\n")
+        else:
+            lines.append("")
+
         days_to_show = [day_index] if day_index is not None else range(5)
 
         for d in days_to_show:
@@ -1151,7 +1474,7 @@ class MJGParser:
                     for card in cards:
                         time_part = f"_{card['time']}_ " if card.get("time") else ""
                         c_name = f"Класс *{card.get('class_name', '')}*"
-                        rooms = f" [🚪 каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else " [каб. не указан]"
+                        rooms = f" [🚪 каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else (f" [🚪 каб. {prim_r}]" if prim_r else " [каб. не указан]")
                         grp_label = f" ({format_group_label(card['group'])})" if card.get("group") else ""
                         lines.append(f"  *{p_num}.* {time_part}{c_name}{grp_label} — *{card['subject']}*{rooms}")
             lines.append("")
@@ -1166,6 +1489,8 @@ class MJGParser:
         norm_t = self.normalize_teacher_name(teacher_name) or teacher_name
         data = self.get_teacher_substitutions(norm_t, date_str=date_str)
         items = data.get("substitutions", [])
+        rooms_info = self.get_teacher_classrooms(norm_t)
+        prim_r = rooms_info.get("primary_room")
 
         lines = [
             f"🔄 *Замены уроков для преподавателя:*",
@@ -1189,8 +1514,18 @@ class MJGParser:
                     role_badge = "🔄 *ИЗМЕНЕНИЕ:*"
 
                 p_str = f"{it['period']} урок" if it.get("period") else "Весь день"
-                lines.append(f"🏫 Класс *{it['class_name']}* ({p_str})")
-                lines.append(f"  {role_badge} {it['info']}\n")
+                s_info = it.get("info", "")
+
+                # Проверяем, есть ли указание кабинета в замене
+                room_badge = ""
+                r_match = re.search(r'Vaheta ruumi:\s*(?:\([^)]+\)\s*➔\s*)?([^\s,]+)', s_info, re.IGNORECASE)
+                if r_match:
+                    room_badge = f" [🚪 каб. {r_match.group(1)}]"
+                elif prim_r and role == "substituting":
+                    room_badge = f" [🚪 каб. {prim_r}]"
+
+                lines.append(f"🏫 Класс *{it['class_name']}* ({p_str}){room_badge}")
+                lines.append(f"  {role_badge} {s_info}\n")
 
         return "\n".join(lines).strip()
 
@@ -1205,6 +1540,10 @@ class MJGParser:
 
         data = self.get_teacher_day_schedule_with_substitutions(teacher_name, target_date)
         norm_t = data["teacher_name"]
+        rooms_info = self.get_teacher_classrooms(norm_t)
+        prim_r = rooms_info.get("primary_room")
+        all_r = rooms_info.get("all_rooms", [])
+        other_r = [r for r in all_r if r != prim_r]
 
         if data.get("is_weekend"):
             return (
@@ -1214,8 +1553,15 @@ class MJGParser:
 
         lines = [
             f"📅 *{data['weekday_name']}, {data['date']}*",
-            f"👩‍🏫 Преподаватель: *{norm_t}*\n"
+            f"👩‍🏫 Преподаватель: *{norm_t}*",
         ]
+
+        if prim_r and other_r:
+            lines.append(f"🚪 Кабинет(ы): *{prim_r}* (также: {', '.join(other_r)})\n")
+        elif prim_r:
+            lines.append(f"🚪 Кабинет: *{prim_r}*\n")
+        else:
+            lines.append("")
 
         lessons = data.get("lessons", [])
         if not lessons:
@@ -1231,11 +1577,19 @@ class MJGParser:
                     for s in substs:
                         role = s.get("teacher_role")
                         prefix = "🟢 Заменяете" if role == "substituting" else "🔴 Вас заменяют" if role == "absent" else "❌ Отмена"
-                        lines.append(f"*{p_num}.* {time_str}*[{prefix}]* Класс *{s['class_name']}*: {s['info']}")
+                        s_info = s.get("info", "")
+                        r_match = re.search(r'Vaheta ruumi:\s*(?:\([^)]+\)\s*➔\s*)?([^\s,]+)', s_info, re.IGNORECASE)
+                        room_badge = ""
+                        if r_match:
+                            room_badge = f" [🚪 каб. {r_match.group(1)}]"
+                        elif prim_r and role == "substituting":
+                            room_badge = f" [🚪 каб. {prim_r}]"
+                        lines.append(f"*{p_num}.* {time_str}*[{prefix}]* Класс *{s['class_name']}*: {s_info}{room_badge}")
                 elif reg_cards:
                     for card in reg_cards:
                         c_name = f"Класс *{card.get('class_name', '')}*"
-                        rooms = f" [🚪 каб. {', '.join(card['classrooms'])}]" if card.get("classrooms") else " [каб. не указан]"
+                        card_rooms = card.get("classrooms", [])
+                        rooms = f" [🚪 каб. {', '.join(card_rooms)}]" if card_rooms else (f" [🚪 каб. {prim_r}]" if prim_r else " [каб. не указан]")
                         grp_label = f" ({format_group_label(card['group'])})" if card.get("group") else ""
                         lines.append(f"*{p_num}.* {time_str}{c_name}{grp_label} — *{card['subject']}*{rooms}")
                 else:
@@ -1245,5 +1599,314 @@ class MJGParser:
             lines.append("\n_🔄 Внимание: на сегодня у вас есть изменения в уроках!_")
         else:
             lines.append("\n_✅ Уроки проходят в штатном режиме._")
+
+        return "\n".join(lines).strip()
+
+    def format_classroom_schedule_for_telegram(self, room_query: str, day_index: Optional[int] = None) -> str:
+        """Форматирует расписание уроков в кабинете для Telegram"""
+        data = self.get_classroom_schedule(room_query, day_index=day_index)
+        r_name = data["room_name"]
+        sched = data["schedule"]
+        top_teachers = data["top_teachers"]
+
+        days_to_show = [day_index] if day_index is not None else range(5)
+
+        lines = [f"🚪 *Кабинет {r_name}*"]
+        if top_teachers:
+            lines.append(f"👩‍🏫 Преподаватель(и): *{', '.join(top_teachers)}*")
+        lines.append("")
+
+        has_any = False
+        for d in days_to_show:
+            d_name = WEEKDAYS_RU[d]
+            lines.append(f"📅 *{d_name}*")
+            day_lessons = sched.get(d, {})
+            if not day_lessons:
+                lines.append("  _Свободен весь день (нет уроков)_")
+            else:
+                has_any = True
+                for p_num in sorted(day_lessons.keys()):
+                    cards = day_lessons[p_num]
+                    for card in cards:
+                        time_part = f"_{card['time']}_ " if card.get("time") else ""
+                        c_name = f"Класс *{card.get('class_name', '')}*"
+                        teachers = f" ({', '.join(card['teachers'])})" if card.get("teachers") else ""
+                        grp_label = f" [{format_group_label(card['group'])}]" if card.get("group") else ""
+                        lines.append(f"  *{p_num}.* {time_part}{c_name} — *{card['subject']}*{grp_label}{teachers}")
+            lines.append("")
+
+        if not has_any and day_index is None:
+            return f"🚪 В кабинете *{r_name}* нет постоянных уроков по базовому расписанию (или кабинет свободен)."
+
+        return "\n".join(lines).strip()
+
+    def format_free_rooms_for_telegram(
+        self,
+        day_index: Optional[int] = None,
+        period_num: Optional[int] = None
+    ) -> str:
+        """Форматирует список свободных кабинетов для Telegram"""
+        res = self.get_free_classrooms(day_index=day_index, period_num=period_num)
+        p_num = res["period_num"]
+        time_str = f" ({res['time_str']})" if res.get("time_str") else ""
+        d_name = res["day_name"]
+        free_rooms = res["free_rooms"]
+
+        lines = [
+            f"🚪 *Свободные кабинеты школы MJG*",
+            f"📅 {d_name}, *{p_num}-й урок*{time_str}\n"
+        ]
+
+        if not free_rooms:
+            lines.append("❌ Все кабинеты заняты на этот урок!")
+        else:
+            lines.append(f"🟢 *Свободно кабинетов:* *{len(free_rooms)}* из {res['total_rooms']}\n")
+            floor0 = [r for r in free_rooms if r.startswith("0")]
+            floor1 = [r for r in free_rooms if r.startswith("1")]
+            floor2 = [r for r in free_rooms if r.startswith("2")]
+            floor3 = [r for r in free_rooms if r.startswith("3")]
+            others = [r for r in free_rooms if r not in floor0 + floor1 + floor2 + floor3]
+
+            if floor0:
+                lines.append(f"• *Цокольный / 0 этаж:* `{', '.join(floor0)}`")
+            if floor1:
+                lines.append(f"• *1-й этаж:* `{', '.join(floor1)}`")
+            if floor2:
+                lines.append(f"• *2-й этаж:* `{', '.join(floor2)}`")
+            if floor3:
+                lines.append(f"• *3-й этаж:* `{', '.join(floor3)}`")
+            if others:
+                lines.append(f"• *Спец. помещения:* `{', '.join(others)}`")
+
+        lines.append("\n💡 _Чтобы посмотреть расписание кабинета, напишите /room <номер>_")
+        return "\n".join(lines).strip()
+
+    def format_whereis_teacher_for_telegram(self, teacher_name: str) -> str:
+        """Форматирует ответ на вопрос 'Где сейчас преподаватель?'"""
+        info = self.get_teacher_current_lesson(teacher_name)
+        norm_t = info["teacher_name"]
+
+        if info.get("status") == "weekend":
+            return f"🏖 Преподаватель *{norm_t}*:\nСейчас выходной день, уроков в школе нет!"
+
+        lines = [f"🔍 *Где сейчас преподаватель: {norm_t}*\n"]
+        status = info.get("status")
+        cur_p = info.get("current_period")
+        cur_l = info.get("current_lesson")
+        cur_s = info.get("current_subst")
+        next_p = info.get("next_period")
+        next_l = info.get("next_lesson")
+
+        if cur_s:
+            role = cur_s.get("teacher_role")
+            action = "ведет замену" if role == "substituting" else "заменяется" if role == "absent" else "изменение"
+            lines.append(f"⚡️ *Сейчас идет {cur_p}-й урок:*")
+            lines.append(f"🔄 Преподаватель *{action}* в классе *{cur_s['class_name']}*")
+            lines.append(f"📝 {cur_s['info']}\n")
+        elif cur_l:
+            c_name = cur_l.get("class_name", "")
+            rooms = ", ".join(cur_l.get("classrooms", [])) or "не указан"
+            subj = cur_l.get("subject", "")
+            t_str = f" ({cur_l['time']})" if cur_l.get("time") else ""
+            lines.append(f"🟢 *ИДЕТ УРОК:* *{cur_p}-й урок*{t_str}")
+            lines.append(f"🏫 Класс: *{c_name}*")
+            lines.append(f"🚪 Кабинет: *{rooms}*")
+            lines.append(f"📖 Предмет: *{subj}*\n")
+        elif status == "in_lesson":
+            lines.append(f"☕️ *Сейчас {cur_p}-й урок:* у учителя окно (нет уроков).\n")
+        elif status == "in_break":
+            lines.append("☕️ *Сейчас перемена.*\n")
+        elif status == "before_school":
+            lines.append("🌅 *Занятия еще не начались.*\n")
+        elif status == "after_school":
+            lines.append("🌙 *Уроки на сегодня окончены.*\n")
+
+        if next_l:
+            c_next = next_l.get("class_name", "")
+            r_next = ", ".join(next_l.get("classrooms", [])) or "не указан"
+            subj_next = next_l.get("subject", "")
+            t_next = f" ({next_l['time']})" if next_l.get("time") else ""
+            lines.append(f"🔜 *Следующий урок:* *{next_p}-й урок*{t_next}")
+            lines.append(f"🏫 Класс: *{c_next}* | 🚪 Кабинет: *{r_next}* ({subj_next})")
+        elif not cur_l and not cur_s and status in ("after_school", "in_lesson", "in_break"):
+            lines.append("✅ Больше уроков на сегодня у преподавателя нет.")
+
+        return "\n".join(lines).strip()
+
+    def format_teacher_classrooms_for_telegram(self, teacher_name: str) -> str:
+        """Подробно форматирует информацию о всех кабинетах преподавателя"""
+        norm_t = self.normalize_teacher_name(teacher_name) or teacher_name
+        info = self.get_teacher_classrooms(norm_t)
+        primary_room = info.get("primary_room")
+        all_rooms = info.get("all_rooms", [])
+        room_counts = info.get("room_counts", {})
+        by_day = info.get("by_day", {})
+        classes_by_room = info.get("classes_by_room", {})
+        subjects_by_room = info.get("subjects_by_room", {})
+
+        if not all_rooms:
+            return (
+                f"🚪 *Кабинеты преподавателя: {norm_t}*\n\n"
+                f"ℹ️ Для данного преподавателя в расписании не указаны закреплённые кабинеты."
+            )
+
+        lines = [
+            f"🚪 *Кабинеты преподавания: {norm_t}*\n"
+        ]
+        if primary_room:
+            p_count = room_counts.get(primary_room, 0)
+            p_subjs = ", ".join(subjects_by_room.get(primary_room, []))
+            subjs_text = f" ({p_subjs})" if p_subjs else ""
+            lines.append(f"🏛 *Основной кабинет:* *{primary_room}*{subjs_text} — *{p_count}* ур./нед.")
+
+        other_rooms = [r for r in all_rooms if r != primary_room]
+        if other_rooms:
+            other_parts = []
+            for r in other_rooms:
+                r_c = room_counts.get(r, 0)
+                r_s = ", ".join(subjects_by_room.get(r, []))
+                s_note = f" [{r_s}]" if r_s else ""
+                other_parts.append(f"*{r}*{s_note} ({r_c} ур.)")
+            lines.append(f"📍 *Другие кабинеты:* {', '.join(other_parts)}")
+
+        lines.append("\n📅 *Кабинеты по дням недели:*")
+        for d in range(5):
+            d_name = WEEKDAYS_RU[d]
+            day_rooms = by_day.get(d, [])
+            if not day_rooms:
+                lines.append(f"  • *{d_name}:* уроков нет")
+            else:
+                day_str = ", ".join([f"каб. *{r}*" for r in day_rooms])
+                lines.append(f"  • *{d_name}:* {day_str}")
+
+        lines.append("\n🏫 *Классы по кабинетам:*")
+        for r in all_rooms:
+            cls_list = classes_by_room.get(r, [])
+            cls_str = ", ".join(cls_list) if cls_list else "—"
+            lines.append(f"  • Каб. *{r}*: классы {cls_str}")
+
+        lines.append("\n_💡 Нажмите «Где сейчас?», чтобы узнать, где учитель находится прямо в данный момент._")
+        return "\n".join(lines).strip()
+
+    def format_all_teachers_classrooms_for_telegram(self, letter: Optional[str] = None) -> str:
+        """Справочник всех преподавателей школы с их кабинетами"""
+        all_tc = self.get_all_teachers_classrooms()
+        teachers = sorted(list(all_tc.keys()))
+        if letter:
+            teachers = [t for t in teachers if t.upper().startswith(letter.upper())]
+
+        lines = [f"📋 *Преподаватели и кабинеты школы MJG* ({len(teachers)}):\n"]
+        for t in teachers:
+            tc = all_tc[t]
+            prim = tc.get("primary_room")
+            all_r = tc.get("all_rooms", [])
+            other = [r for r in all_r if r != prim]
+            if prim and other:
+                lines.append(f"• *{t}* ➔ каб. *{prim}* _(также: {', '.join(other)})_")
+            elif prim:
+                lines.append(f"• *{t}* ➔ каб. *{prim}*")
+            elif all_r:
+                lines.append(f"• *{t}* ➔ каб. *{', '.join(all_r)}*")
+
+        lines.append("\n💡 _Чтобы посмотреть расписание кабинета: `/room <номер>` (напр. `/room 106`)_")
+        lines.append("💡 _Чтобы посмотреть расписание учителя: `/teacher <фамилия>`_")
+        return "\n".join(lines).strip()
+
+    def search_school(self, query: str) -> Dict[str, Any]:
+        """
+        Универсальный поиск по школе:
+        - классы
+        - учителя
+        - кабинеты
+        - предметы
+        """
+        q = query.strip()
+        q_lower = q.lower()
+        res = {
+            "query": q,
+            "classes": [],
+            "teachers": [],
+            "classrooms": [],
+            "subjects": []
+        }
+
+        # 1. Поиск по классам
+        norm_c = self.normalize_class_name(q)
+        classes = self.get_classes()
+        if norm_c in classes:
+            res["classes"].append(norm_c)
+        else:
+            for c in classes:
+                if q_lower in c.lower():
+                    res["classes"].append(c)
+
+        # 2. Поиск по учителям
+        norm_t = self.normalize_teacher_name(q)
+        if norm_t:
+            res["teachers"].append(norm_t)
+        else:
+            teachers = self.get_teachers()
+            for t in teachers:
+                if q_lower in t.lower() or q_lower in self.transliterate_ru_to_et(t).lower():
+                    if t not in res["teachers"]:
+                        res["teachers"].append(t)
+
+        # 3. Поиск по кабинетам
+        clean_room = re.sub(r'^(каб\.?|кабинет|room)\s*', '', q_lower, flags=re.IGNORECASE).strip()
+        all_rooms = self.get_all_classrooms()
+        for r in all_rooms:
+            if clean_room == r.lower() or (len(clean_room) >= 2 and clean_room in r.lower()):
+                res["classrooms"].append(r)
+
+        # 4. Поиск по предметам
+        tt = self.get_regular_timetable()
+        all_subjects = set()
+        for c_days in tt.get("schedule", {}).values():
+            for day_lessons in c_days.values():
+                for cards in day_lessons.values():
+                    for card in cards:
+                        subj = card.get("subject", "")
+                        if subj and q_lower in subj.lower():
+                            all_subjects.add(subj)
+        res["subjects"] = sorted(list(all_subjects))
+
+        return res
+
+    def format_search_for_telegram(self, query: str) -> str:
+        """Форматирует результат универсального поиска"""
+        res = self.search_school(query)
+        q = res["query"]
+
+        has_results = any(res[k] for k in ["classes", "teachers", "classrooms", "subjects"])
+        if not has_results:
+            return (
+                f"🔍 *Поиск по запросу «{q}»*\n\n"
+                f"❌ Ничего не найдено.\n"
+                f"Попробуйте указать класс (напр. `8K`), фамилию учителя (напр. `Кулакова`), "
+                f"кабинет (напр. `204`) или предмет (напр. `Keemia`)."
+            )
+
+        lines = [f"🔍 *Результаты поиска «{q}»:*\n"]
+
+        if res["classes"]:
+            cls_str = ", ".join([f"*{c}*" for c in res["classes"][:10]])
+            lines.append(f"🏫 *Классы:* {cls_str}")
+            lines.append("  _Команда:_ `/today <класс>` или `/schedule <класс>`\n")
+
+        if res["teachers"]:
+            lines.append(f"👩‍🏫 *Преподаватели:*")
+            for t in res["teachers"][:5]:
+                t_info = self.get_teacher_classrooms(t)
+                prim = t_info.get("primary_room")
+                prim_str = f" [🚪 каб. *{prim}*]" if prim else ""
+                lines.append(f"  • *{t}*{prim_str} — `/teacher {t}`")
+            lines.append("")
+
+        if res["classrooms"]:
+            lines.append(f"🚪 *Кабинеты:* {', '.join([f'*{r}*' for r in res['classrooms'][:10]])}")
+            lines.append("  _Команда:_ `/room <номер>`\n")
+
+        if res["subjects"]:
+            lines.append(f"📖 *Предметы:* {', '.join(res['subjects'][:8])}\n")
 
         return "\n".join(lines).strip()
