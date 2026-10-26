@@ -1307,5 +1307,18 @@
       ]
     },
     "date": "2026-10-21"
+  },
+  "2026-10-26": {
+    "timestamp": 1793008884.183462,
+    "data": {
+      "BCE": [
+        {
+          "period": "",
+          "info": "Sellel päeval pole tühistatud tunde või asendusi.",
+          "type": "change"
+        }
+      ]
+    },
+    "date": "2026-10-26"
   }
 }

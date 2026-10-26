@@ -1,13 +1,17 @@
 import sys
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-import os
-from datetime import date, timedelta
-from parser import MJGParser, format_group_label, should_show_card
-from bot import AdminManager, UserPreferences
+from datetime import date
+from parser import MJGParser, should_show_card
+from bot import AdminManager
 
 def run_tests():
     print("=" * 65)
@@ -160,9 +164,9 @@ def run_tests():
 
     test_admin_id = 987654321
     added = admin_mgr.add_admin(test_admin_id)
-    assert admin_mgr.is_admin(test_admin_id), "Новый администратор должен быть добавлен!"
+    assert added and admin_mgr.is_admin(test_admin_id), "Новый администратор должен быть добавлен!"
     removed = admin_mgr.remove_admin(test_admin_id)
-    assert not admin_mgr.is_admin(test_admin_id), "Администратор должен быть успешно удален!"
+    assert removed and not admin_mgr.is_admin(test_admin_id), "Администратор должен быть успешно удален!"
     print("  ✅ Добавление, проверка и удаление администраторов работают корректно!")
 
     # 7. Тест форматирования сообщений
@@ -188,7 +192,6 @@ def run_tests():
         "data": test_subst_data["classes"],
         "date": test_date_key
     }
-    from datetime import date
     comb = parser.get_day_schedule_with_substitutions("8K", target_date=date(2026, 10, 22))
     p_map = {l["period"]: l for l in comb["lessons"]}
     assert len(p_map[3]["substitutions"]) == 1, "Замена '3 - 4' должна быть прикреплена к 3 уроку!"

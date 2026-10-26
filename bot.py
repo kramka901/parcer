@@ -3,8 +3,13 @@ import sys
 import json
 import logging
 import asyncio
+from pathlib import Path
 from datetime import date, datetime, timedelta
 from typing import Optional, Dict, Any, List
+
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -30,14 +35,17 @@ from telegram.ext import (
 from config import (
     TELEGRAM_BOT_TOKEN,
     USER_DATA_FILE,
+    USER_BACKUP_FILE,
+    CHAT_DATA_FILE,
+    INITIAL_USER_COUNT,
     SEEN_SUBSTITUTIONS_FILE,
     ADMINS_FILE,
     DEFAULT_ADMIN_IDS,
     SUBSTITUTION_CHECK_INTERVAL,
-    WEEKDAYS_RU,
-    WEEKDAYS_SHORT_RU
+    WEEKDAYS_SHORT_RU,
+    get_env_diagnostic_info
 )
-from parser import MJGParser, format_group_label
+from parser import MJGParser
 
 # Настройка логирования
 logging.basicConfig(
@@ -115,31 +123,60 @@ admin_manager = AdminManager()
 class UserPreferences:
     """Управление сохранёнными настройками пользователей (роль: ученик/учитель, класс, уведомления, подгруппы)"""
 
-    def __init__(self, filepath=USER_DATA_FILE):
+    def __init__(self, filepath=USER_DATA_FILE, backup_filepath=USER_BACKUP_FILE):
         self.filepath = filepath
+        self.backup_filepath = backup_filepath
         self._data: Dict[str, Dict[str, Any]] = {}
+        self._target_count: int = INITIAL_USER_COUNT
         self._load()
 
     def _load(self):
+        loaded = False
         if os.path.exists(self.filepath):
             try:
                 with open(self.filepath, "r", encoding="utf-8") as f:
                     self._data = json.load(f)
+                    loaded = True
             except Exception as e:
                 logger.error(f"Ошибка чтения настроек пользователей: {e}")
-                self._data = {}
+
+        if not loaded and os.path.exists(self.backup_filepath):
+            try:
+                with open(self.backup_filepath, "r", encoding="utf-8") as f:
+                    self._data = json.load(f)
+                    loaded = True
+            except Exception as e:
+                logger.error(f"Ошибка чтения резервной копии настроек: {e}")
+
+        if not loaded:
+            self._data = {}
+
+        meta = self._data.get("_meta", {})
+        if "target_count" in meta:
+            try:
+                self._target_count = int(meta["target_count"])
+            except (ValueError, TypeError):
+                self._target_count = INITIAL_USER_COUNT
+        else:
+            self._target_count = INITIAL_USER_COUNT
 
     def _save(self):
         try:
+            self._data.setdefault("_meta", {})["target_count"] = self._target_count
             with open(self.filepath, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, ensure_ascii=False, indent=2)
+            try:
+                with open(self.backup_filepath, "w", encoding="utf-8") as bf:
+                    json.dump(self._data, bf, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"Ошибка сохранения настроек пользователей: {e}")
 
-    def get_user(self, user_id: int) -> Dict[str, Any]:
+    def get_user(self, user_id: Any) -> Dict[str, Any]:
         return self._data.get(str(user_id), {})
 
-    def has_role(self, user_id: int) -> bool:
+    def has_role(self, user_id: Any) -> bool:
         """Проверяет, выбрал ли пользователь уже роль и сущность"""
         user = self.get_user(user_id)
         role = user.get("role")
@@ -149,7 +186,7 @@ class UserPreferences:
             return True
         return False
 
-    def get_role(self, user_id: int) -> Optional[str]:
+    def get_role(self, user_id: Any) -> Optional[str]:
         """Возвращает 'teacher', 'student' или None"""
         user = self.get_user(user_id)
         role = user.get("role")
@@ -160,35 +197,39 @@ class UserPreferences:
                 return "student"
         return role
 
-    def get_class(self, user_id: int) -> Optional[str]:
+    def get_class(self, user_id: Any) -> Optional[str]:
         return self.get_user(user_id).get("class_name")
 
-    def get_teacher(self, user_id: int) -> Optional[str]:
+    def get_teacher(self, user_id: Any) -> Optional[str]:
         return self.get_user(user_id).get("teacher_name")
 
-    def set_student(self, user_id: int, class_name: str):
+    def set_student(self, user_id: Any, class_name: str):
         uid = str(user_id)
         if uid not in self._data:
             self._data[uid] = {}
         self._data[uid]["role"] = "student"
         self._data[uid]["class_name"] = class_name
+        self._data[uid]["is_active"] = True
+        self._data[uid].pop("inactive_reason", None)
         self._data[uid].pop("teacher_name", None)
         if "notifications" not in self._data[uid]:
             self._data[uid]["notifications"] = True
         self._save()
 
-    def set_teacher(self, user_id: int, teacher_name: str):
+    def set_teacher(self, user_id: Any, teacher_name: str):
         uid = str(user_id)
         if uid not in self._data:
             self._data[uid] = {}
         self._data[uid]["role"] = "teacher"
         self._data[uid]["teacher_name"] = teacher_name
+        self._data[uid]["is_active"] = True
+        self._data[uid].pop("inactive_reason", None)
         self._data[uid].pop("class_name", None)
         if "notifications" not in self._data[uid]:
             self._data[uid]["notifications"] = True
         self._save()
 
-    def reset_role(self, user_id: int):
+    def reset_role(self, user_id: Any):
         uid = str(user_id)
         if uid in self._data:
             self._data[uid].pop("role", None)
@@ -196,24 +237,24 @@ class UserPreferences:
             self._data[uid].pop("teacher_name", None)
             self._save()
 
-    def is_notifications_enabled(self, user_id: int) -> bool:
+    def is_notifications_enabled(self, user_id: Any) -> bool:
         return self.get_user(user_id).get("notifications", True)
 
-    def set_notifications(self, user_id: int, enabled: bool):
+    def set_notifications(self, user_id: Any, enabled: bool):
         uid = str(user_id)
         if uid not in self._data:
             self._data[uid] = {}
         self._data[uid]["notifications"] = enabled
         self._save()
 
-    def toggle_notifications(self, user_id: int) -> bool:
+    def toggle_notifications(self, user_id: Any) -> bool:
         current = self.is_notifications_enabled(user_id)
         new_val = not current
         self.set_notifications(user_id, new_val)
         return new_val
 
     # Настройки подгрупп
-    def get_subgroup_filter(self, user_id: int) -> Dict[str, str]:
+    def get_subgroup_filter(self, user_id: Any) -> Dict[str, str]:
         user = self.get_user(user_id)
         filt = {}
         if user.get("subgroup_gender"):
@@ -222,7 +263,7 @@ class UserPreferences:
             filt["academic"] = user["subgroup_academic"]
         return filt
 
-    def set_gender_filter(self, user_id: int, gender: Optional[str]):
+    def set_gender_filter(self, user_id: Any, gender: Optional[str]):
         uid = str(user_id)
         if uid not in self._data:
             self._data[uid] = {}
@@ -232,7 +273,7 @@ class UserPreferences:
             self._data[uid].pop("subgroup_gender", None)
         self._save()
 
-    def set_academic_filter(self, user_id: int, academic: Optional[str]):
+    def set_academic_filter(self, user_id: Any, academic: Optional[str]):
         uid = str(user_id)
         if uid not in self._data:
             self._data[uid] = {}
@@ -243,10 +284,130 @@ class UserPreferences:
         self._save()
 
     def get_all_users(self) -> Dict[str, Dict[str, Any]]:
-        return self._data
+        return {k: v for k, v in self._data.items() if not k.startswith("_")}
+
+    def get_active_users_count(self) -> int:
+        inactive_count = sum(
+            1 for k, v in self._data.items()
+            if not k.startswith("_") and v.get("is_active") is False
+        )
+        real_users = [k for k in self._data if not k.startswith("_") and not k.startswith("saved_user_")]
+        base = max(self._target_count, len(real_users))
+        return max(0, base - inactive_count)
+
+    def set_user_inactive(self, user_id: Any, reason: str = "blocked"):
+        uid = str(user_id)
+        if uid not in self._data:
+            self._data[uid] = {}
+        self._data[uid]["is_active"] = False
+        self._data[uid]["inactive_reason"] = reason
+        self._data[uid]["notifications"] = False
+        self._save()
+
+    def set_user_active(self, user_id: Any):
+        uid = str(user_id)
+        if uid not in self._data:
+            self._data[uid] = {}
+        self._data[uid]["is_active"] = True
+        self._data[uid].pop("inactive_reason", None)
+        self._save()
+
+    def set_target_count(self, target: int):
+        self._target_count = int(target)
+        self._save()
 
 
 user_prefs = UserPreferences()
+
+
+# ================= Управление групповыми чатами =================
+
+class ChatPreferences:
+    """Управление настройками групповых бесед и каналов (привязка класса к группе, уведомления)"""
+
+    def __init__(self, filepath=CHAT_DATA_FILE):
+        self.filepath = filepath
+        self._data: Dict[str, Dict[str, Any]] = {}
+        self._load()
+
+    def _load(self):
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, "r", encoding="utf-8") as f:
+                    self._data = json.load(f)
+            except Exception as e:
+                logger.error(f"Ошибка чтения настроек групповых чатов: {e}")
+                self._data = {}
+
+    def _save(self):
+        try:
+            with open(self.filepath, "w", encoding="utf-8") as f:
+                json.dump(self._data, f, ensure_ascii=False, indent=2)
+            try:
+                with open(self.filepath.with_suffix(".json.bak"), "w", encoding="utf-8") as bf:
+                    json.dump(self._data, bf, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error(f"Ошибка сохранения настроек групповых чатов: {e}")
+
+    def get_chat(self, chat_id: Any) -> Dict[str, Any]:
+        return self._data.get(str(chat_id), {})
+
+    def get_class(self, chat_id: Any) -> Optional[str]:
+        return self.get_chat(chat_id).get("class_name")
+
+    def set_class(self, chat_id: Any, class_name: str, title: Optional[str] = None):
+        cid = str(chat_id)
+        if cid not in self._data:
+            self._data[cid] = {}
+        self._data[cid]["class_name"] = class_name
+        if title:
+            self._data[cid]["title"] = title
+        if "notifications" not in self._data[cid]:
+            self._data[cid]["notifications"] = True
+        self._save()
+
+    def remove_chat(self, chat_id: Any):
+        cid = str(chat_id)
+        if cid in self._data:
+            self._data.pop(cid, None)
+            self._save()
+
+    def is_notifications_enabled(self, chat_id: Any) -> bool:
+        return self.get_chat(chat_id).get("notifications", True)
+
+    def set_notifications(self, chat_id: Any, enabled: bool):
+        cid = str(chat_id)
+        if cid not in self._data:
+            self._data[cid] = {}
+        self._data[cid]["notifications"] = enabled
+        self._save()
+
+    def get_all_chats(self) -> Dict[str, Dict[str, Any]]:
+        return {k: v for k, v in self._data.items() if not k.startswith("_")}
+
+
+chat_prefs = ChatPreferences()
+
+
+def get_group_chat_keyboard(chat_id: Any) -> InlineKeyboardMarkup:
+    """Интерактивная панель управления расписанием для групповых бесед"""
+    c_name = chat_prefs.get_class(chat_id) or "Класс не выбран"
+    keyboard = [
+        [
+            InlineKeyboardButton(f"📅 Сегодня ({c_name})", callback_data=f"grp_today_{chat_id}"),
+            InlineKeyboardButton(f"📆 Завтра ({c_name})", callback_data=f"grp_tomorrow_{chat_id}")
+        ],
+        [
+            InlineKeyboardButton(f"📚 Расписание {c_name}", callback_data=f"grp_schedule_{chat_id}"),
+            InlineKeyboardButton(f"🔄 Замены {c_name}", callback_data=f"grp_subst_{chat_id}")
+        ],
+        [
+            InlineKeyboardButton("⚙️ Сменить класс беседы", callback_data=f"grp_setclass_{chat_id}")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 
 # ================= Отслеживание уже отправленных замен =================
@@ -851,6 +1012,7 @@ async def cmd_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_setclass(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /setclass <класс>"""
     user_id = update.effective_user.id
+    chat = update.effective_chat
     if not context.args:
         await safe_reply(update, "⚠️ Пожалуйста, укажите класс, например: `/setclass 10A`")
         return
@@ -861,6 +1023,15 @@ async def cmd_setclass(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if norm_class not in available_classes:
         await safe_reply(update, f"❌ Класс *{norm_class}* не найден.\nИспользуйте /classes для списка доступных классов.")
+        return
+
+    if chat.type in ("group", "supergroup"):
+        chat_prefs.set_class(chat.id, norm_class, title=chat.title)
+        text = (
+            f"✅ Класс *{norm_class}* успешно привязан к этой беседе!\n\n"
+            f"Теперь участники могут быстро смотреть расписание через команду `/bot` или кнопки ниже."
+        )
+        await safe_reply(update, text, reply_markup=get_group_chat_keyboard(chat.id))
         return
 
     user_prefs.set_student(user_id, norm_class)
@@ -910,7 +1081,22 @@ async def cmd_notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /today [класс/учитель]"""
     user_id = update.effective_user.id
+    chat = update.effective_chat
     role = user_prefs.get_role(user_id)
+
+    # Если в группе и без аргументов
+    if chat.type in ("group", "supergroup") and not context.args:
+        c_name = chat_prefs.get_class(chat.id)
+        if not c_name:
+            await safe_reply(
+                update,
+                "⚠️ К этой беседе пока не привязан класс.\n"
+                "Привяжите его командой: `/setclass <класс>` (например `/setclass 10A`)."
+            )
+            return
+        msg = parser.format_day_combined_for_telegram(c_name, target_date=date.today())
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
+        return
 
     # Если передан аргумент: может быть класс или учитель
     if context.args:
@@ -954,8 +1140,22 @@ async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_tomorrow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /tomorrow [класс/учитель]"""
     user_id = update.effective_user.id
+    chat = update.effective_chat
     role = user_prefs.get_role(user_id)
     tomorrow_dt = get_target_date_for_tomorrow()
+
+    if chat.type in ("group", "supergroup") and not context.args:
+        c_name = chat_prefs.get_class(chat.id)
+        if not c_name:
+            await safe_reply(
+                update,
+                "⚠️ К этой беседе пока не привязан класс.\n"
+                "Привяжите его командой: `/setclass <класс>` (например `/setclass 10A`)."
+            )
+            return
+        msg = parser.format_day_combined_for_telegram(c_name, target_date=tomorrow_dt)
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
+        return
 
     if context.args:
         arg = " ".join(context.args)
@@ -996,7 +1196,21 @@ async def cmd_tomorrow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /schedule [класс]"""
     user_id = update.effective_user.id
+    chat = update.effective_chat
     role = user_prefs.get_role(user_id)
+
+    if chat.type in ("group", "supergroup") and not context.args:
+        c_name = chat_prefs.get_class(chat.id)
+        if not c_name:
+            await safe_reply(
+                update,
+                "⚠️ К этой беседе пока не привязан класс.\n"
+                "Привяжите его командой: `/setclass <класс>`."
+            )
+            return
+        msg = parser.format_schedule_for_telegram(c_name)
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
+        return
 
     if not context.args and role == "teacher":
         teacher_name = user_prefs.get_teacher(user_id)
@@ -1023,8 +1237,15 @@ async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_substitutions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /substitutions [класс]"""
     user_id = update.effective_user.id
+    chat = update.effective_chat
     role = user_prefs.get_role(user_id)
     date_str = date.today().strftime("%Y-%m-%d")
+
+    if chat.type in ("group", "supergroup") and not context.args:
+        c_name = chat_prefs.get_class(chat.id)
+        msg = parser.format_substitutions_for_telegram(date_str=date_str, class_name=c_name)
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
+        return
 
     if not context.args and role == "teacher":
         teacher_name = user_prefs.get_teacher(user_id)
@@ -1037,6 +1258,158 @@ async def cmd_substitutions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = parser.format_substitutions_for_telegram(date_str=date_str, class_name=class_name)
     keyboard = get_main_menu_keyboard(user_id)
     await safe_reply(update, msg, reply_markup=keyboard)
+
+
+# ================= Дополнительные пользовательские команды =================
+
+async def cmd_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает расписание кабинета и список учителей: /room <номер>"""
+    if context.args:
+        room_query = " ".join(context.args).strip()
+        text = parser.format_classroom_schedule_for_telegram(room_query)
+        await safe_reply(update, text)
+    else:
+        text = (
+            "🚪 *Расписание кабинета школы:*\n\n"
+            "Укажите номер кабинета после команды, например:\n"
+            "• `/room 204`\n"
+            "• `/room 106`\n"
+            "• `/room 001`\n\n"
+            "Или используйте команду `/rooms` для просмотра всех кабинетов."
+        )
+        await safe_reply(update, text)
+
+
+async def cmd_rooms(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Справочник всех учебных кабинетов школы: /rooms"""
+    text = parser.format_all_teachers_classrooms_for_telegram()
+    await safe_reply(update, text)
+
+
+async def cmd_freerooms(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Свободные кабинеты прямо сейчас: /freerooms"""
+    text = parser.format_free_rooms_for_telegram()
+    await safe_reply(update, text)
+
+
+async def cmd_whereis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Где сейчас находится преподаватель: /whereis <учитель>"""
+    if context.args:
+        t_query = " ".join(context.args).strip()
+        text = parser.format_whereis_teacher_for_telegram(t_query)
+        await safe_reply(update, text)
+    else:
+        text = (
+            "🔍 *Где сейчас преподаватель:*\n\n"
+            "Укажите фамилию учителя, например:\n"
+            "• `/whereis Кулакова`\n"
+            "• `/whereis Волосова`\n"
+            "• `/whereis Ahv`"
+        )
+        await safe_reply(update, text)
+
+
+async def cmd_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Универсальный школьный поиск: /search <запрос>"""
+    if context.args:
+        query = " ".join(context.args).strip()
+        text = parser.format_search_for_telegram(query)
+        await safe_reply(update, text)
+    else:
+        text = (
+            "🔍 *Универсальный школьный поиск MJG:*\n\n"
+            "Введите поисковый запрос (учитель, класс, кабинет, предмет):\n"
+            "• `/search Кулакова`\n"
+            "• `/search 204`\n"
+            "• `/search 8K`\n"
+            "• `/search Математика`"
+        )
+        await safe_reply(update, text)
+
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Статистика пользователей и школьной базы: /stats"""
+    active_users = user_prefs.get_active_users_count()
+    all_users = len(user_prefs.get_all_users())
+    total_chats = len(chat_prefs.get_all_chats())
+    total_classes = len(parser.get_classes())
+    total_teachers = len(parser.get_teachers())
+    total_rooms = len(parser.get_all_classrooms())
+    cached_subst_dates = len(parser._substitutions_cache)
+
+    text = (
+        "📊 *Статистика Telegram-бота Tallinna Mustjõe Gümnaasium:*\n\n"
+        f"👥 *Пользователи:*\n"
+        f"• Активных пользователей: *{active_users}*\n"
+        f"• Всего зарегистрировано: *{all_users}*\n"
+        f"• Подключенных групповых бесед: *{total_chats}*\n\n"
+        f"🏫 *Школьная база данных:*\n"
+        f"• Классов в школе: *{total_classes}*\n"
+        f"• Преподавателей: *{total_teachers}*\n"
+        f"• Учебных кабинетов: *{total_rooms}*\n"
+        f"• Загружено дат замен: *{cached_subst_dates}*\n\n"
+        f"🔄 *Мониторинг замен:* каждые {SUBSTITUTION_CHECK_INTERVAL} сек."
+    )
+    await safe_reply(update, text)
+
+
+async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выход и отписка от бота: /stop или /leave"""
+    user_id = update.effective_user.id
+    user_prefs.set_user_inactive(user_id, reason="user_stop")
+    text = (
+        "👋 *Вы успешно отписались от бота.*\n\n"
+        "• Все авто-уведомления отключены.\n"
+        "• Ваш профиль деактивирован, счётчик активных пользователей обновлён.\n\n"
+        "Чтобы снова начать пользоваться ботом и получать расписание, просто отправьте /start в любое время!"
+    )
+    await safe_reply(update, text)
+
+
+async def cmd_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вызов интерактивной панели бота в групповых чатах: /bot [запрос]"""
+    chat = update.effective_chat
+    if chat.type in ("group", "supergroup"):
+        bound_class = chat_prefs.get_class(chat.id)
+        if context.args:
+            q = " ".join(context.args).strip().lower()
+            if q in ("сегодня", "today"):
+                c_name = bound_class or "8K"
+                msg = parser.format_day_combined_for_telegram(c_name, offset_days=0)
+                await safe_reply(update, msg)
+                return
+            elif q in ("завтра", "tomorrow"):
+                c_name = bound_class or "8K"
+                msg = parser.format_day_combined_for_telegram(c_name, offset_days=1)
+                await safe_reply(update, msg)
+                return
+            elif q in ("замены", "substitutions", "зам"):
+                c_name = bound_class or "8K"
+                msg = parser.format_substitutions_for_telegram(c_name)
+                await safe_reply(update, msg)
+                return
+            else:
+                msg = parser.format_search_for_telegram(q)
+                await safe_reply(update, msg)
+                return
+
+        if bound_class:
+            text = (
+                f"🤖 *Школьный бот MJG в беседе: {chat.title or 'Группа'}*\n\n"
+                f"🏫 Привязанный класс: *{bound_class}*\n"
+                "Выберите нужное действие на кнопках ниже:"
+            )
+            await safe_reply(update, text, reply_markup=get_group_chat_keyboard(chat.id))
+        else:
+            text = (
+                f"👋 *Приветствую в беседе {chat.title or ''}!*"
+                "\n\nК этой группе пока не привязан класс.\n"
+                "Чтобы привязать класс к беседе, напишите команду:\n"
+                "`/setclass <класс>` (например, `/setclass 10A`)"
+            )
+            await safe_reply(update, text)
+    else:
+        await cmd_start(update, context)
 
 
 # ================= Команды Администратора =================
@@ -1169,6 +1542,28 @@ async def cmd_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"{i}. ID: `{aid}`{extra}")
 
     await safe_reply(update, "\n".join(lines), reply_markup=get_admin_manage_keyboard())
+
+
+async def cmd_setusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /setusers <число>: установить целевое количество пользователей бота"""
+    user_id = update.effective_user.id
+    if not admin_manager.is_admin(user_id):
+        await safe_reply(update, "⛔ *Доступ запрещён.*")
+        return
+
+    if not context.args or not context.args[0].isdigit():
+        await safe_reply(update, "⚠️ Использование: `/setusers <число>`\nНапример: `/setusers 97`")
+        return
+
+    new_target = int(context.args[0])
+    user_prefs.set_target_count(new_target)
+    current_active = user_prefs.get_active_users_count()
+    await safe_reply(
+        update,
+        f"✅ Базовое количество пользователей успешно установлено: *{new_target}*.\n"
+        f"Текущий счётчик активных пользователей: *{current_active}*.",
+        reply_markup=get_admin_main_keyboard()
+    )
 
 
 # ================= Обработчик нажатий кнопок (Callback Query) =================
@@ -1558,7 +1953,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 success_count += 1
             except Forbidden:
                 blocked_count += 1
-            except TelegramError as te:
+            except TelegramError:
                 # Попытка отправки без Markdown при ошибке парсинга
                 try:
                     await context.bot.send_message(
@@ -1844,7 +2239,7 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
                     class_items = [it for it in items if it["class_name"] == u_class or it["class_name"] == "Все"]
                     if class_items:
                         lines = [
-                            f"🔔 *Внимание! Новые замены уроков!*",
+                            "🔔 *Внимание! Новые замены уроков!*",
                             f"🏫 Класс: *{u_class}*",
                             f"📅 Дата: *{d_str}*\n"
                         ]
@@ -1885,7 +2280,7 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
 
                     if teacher_items:
                         lines = [
-                            f"🔔 *Внимание! Новые изменения в ваших уроках!*",
+                            "🔔 *Внимание! Новые изменения в ваших уроках!*",
                             f"👩‍🏫 Преподаватель: *{u_teacher}*",
                             f"📅 Дата: *{d_str}*\n"
                         ]
@@ -1916,7 +2311,9 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "ВАШ_ТОКЕН_БОТА_ЗДЕСЬ":
         print("\n" + "!" * 60)
-        print("ВНИМАНИЕ: Не задан TELEGRAM_BOT_TOKEN в файле .env!")
+        print("ВНИМАНИЕ: Не задан корректный TELEGRAM_BOT_TOKEN в файле .env!")
+        print("-" * 60)
+        print(get_env_diagnostic_info())
         print("!" * 60 + "\n")
         return
 
@@ -1945,6 +2342,7 @@ def main():
     app.add_handler(CommandHandler("addadmin", cmd_addadmin))
     app.add_handler(CommandHandler("deladmin", cmd_deladmin))
     app.add_handler(CommandHandler("admins", cmd_admins))
+    app.add_handler(CommandHandler("setusers", cmd_setusers))
 
     # Регистрация callback queries
     app.add_handler(CallbackQueryHandler(handle_callback_query))

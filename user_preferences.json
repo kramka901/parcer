@@ -667,5 +667,15 @@
     "is_active": true,
     "created_at": "pre_update",
     "legacy": true
+  },
+  "saved_user_1002": {
+    "role": "student",
+    "notifications": true,
+    "is_active": true,
+    "created_at": "pre_update",
+    "legacy": true
+  },
+  "_meta": {
+    "target_count": 97
   }
 }

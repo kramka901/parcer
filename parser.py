@@ -3,9 +3,13 @@ import sys
 import json
 import time
 import logging
-from datetime import datetime, date, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime, date
+from typing import Dict, List, Optional, Any, Tuple, Set
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -16,7 +20,6 @@ import requests
 from bs4 import BeautifulSoup
 
 from config import (
-    EDUPAGE_BASE_URL,
     SUBSTITUTION_URL,
     TIMETABLE_URL,
     TT_VIEWER_RPC_URL,
@@ -28,8 +31,7 @@ from config import (
     TEACHERS_DATA_FILE,
     EDUPAGE_PROXY,
     REQUEST_TIMEOUT,
-    WEEKDAYS_RU,
-    WEEKDAYS_SHORT_RU
+    WEEKDAYS_RU
 )
 
 logger = logging.getLogger(__name__)
@@ -1493,7 +1495,7 @@ class MJGParser:
         prim_r = rooms_info.get("primary_room")
 
         lines = [
-            f"🔄 *Замены уроков для преподавателя:*",
+            "🔄 *Замены уроков для преподавателя:*",
             f"👩‍🏫 *{norm_t}*",
             f"📅 Дата: *{date_str}*\n"
         ]
@@ -1653,7 +1655,7 @@ class MJGParser:
         free_rooms = res["free_rooms"]
 
         lines = [
-            f"🚪 *Свободные кабинеты школы MJG*",
+            "🚪 *Свободные кабинеты школы MJG*",
             f"📅 {d_name}, *{p_num}-й урок*{time_str}\n"
         ]
 
@@ -1894,7 +1896,7 @@ class MJGParser:
             lines.append("  _Команда:_ `/today <класс>` или `/schedule <класс>`\n")
 
         if res["teachers"]:
-            lines.append(f"👩‍🏫 *Преподаватели:*")
+            lines.append("👩‍🏫 *Преподаватели:*")
             for t in res["teachers"][:5]:
                 t_info = self.get_teacher_classrooms(t)
                 prim = t_info.get("primary_room")
