@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import logging
+import threading
 from datetime import datetime, date
 from typing import Dict, List, Optional, Any, Tuple, Set
 from pathlib import Path
@@ -159,6 +160,13 @@ class MJGParser:
                 "https": EDUPAGE_PROXY
             })
 
+        # Блокировка для безопасной работы из нескольких потоков (бот вызывает парсер через to_thread)
+        self._lock = threading.RLock()
+        # Пауза перед повторной попыткой после сетевого сбоя (сек), чтобы не «вешать» бота
+        self._retry_cooldown = 120
+        self._tt_next_retry: float = 0
+        self._subst_next_retry: Dict[str, float] = {}
+
         # Кэш данных
         self._classes_cache: Optional[Dict[str, Any]] = None
         self._teachers_cache: Optional[Dict[str, Any]] = None
@@ -308,6 +316,10 @@ class MJGParser:
             if surname and surname in (q, q_translit):
                 return t_name
 
+        # Слишком короткие запросы (1–2 символа) дают случайные совпадения — не ищем по ним
+        if len(q) < 3:
+            return None
+
         # 3. Фамилия начинается с запроса или запрос входит в фамилию/имя
         for t_name, info in teachers.items():
             surname = info.get("surname", "").lower()
@@ -315,6 +327,8 @@ class MJGParser:
                 return t_name
 
         # 4. Упрощенное фонетическое совпадение с фамилией
+        if len(q_clean) < 3 and len(q_translit_clean) < 3:
+            return None
         for t_name, info in teachers.items():
             surname = info.get("surname", "")
             sur_clean = clean_key(surname)
@@ -384,6 +398,10 @@ class MJGParser:
         Загружает и парсит базовое расписание уроков школы на учебный период.
         При ошибках сети безопасно возвращает локальный кэш.
         """
+        with self._lock:
+            return self._get_regular_timetable_locked(force_refresh)
+
+    def _get_regular_timetable_locked(self, force_refresh: bool = False) -> Dict[str, Any]:
         now = time.time()
         if (
             not force_refresh
@@ -391,6 +409,10 @@ class MJGParser:
             and (now - self._timetable_cache_time) < TIMETABLE_CACHE_TTL
             and self._timetable_cache.get("teachers")
         ):
+            return self._timetable_cache
+
+        # Недавно была неудачная попытка — не мучаем сеть на каждое нажатие кнопки
+        if not force_refresh and self._timetable_cache and now < self._tt_next_retry:
             return self._timetable_cache
 
         try:
@@ -585,6 +607,9 @@ class MJGParser:
 
         except Exception as e:
             logger.warning(f"Ошибка загрузки расписания онлайн ({e}), используется локальный кэш.")
+
+        # Онлайн-загрузка не удалась: следующая попытка не раньше чем через _retry_cooldown секунд
+        self._tt_next_retry = time.time() + self._retry_cooldown
 
         if self._timetable_cache:
             return self._timetable_cache
@@ -1020,6 +1045,15 @@ class MJGParser:
         Получает замены и отмены уроков с EduPage на указанную дату (по умолчанию сегодня).
         При отсутствии сети обращается к локальному кэшу.
         """
+        with self._lock:
+            return self._get_substitutions_locked(date_str, class_name, force_refresh)
+
+    def _get_substitutions_locked(
+        self,
+        date_str: Optional[str] = None,
+        class_name: Optional[str] = None,
+        force_refresh: bool = False
+    ) -> Dict[str, Any]:
         if not date_str:
             date_str = date.today().strftime("%Y-%m-%d")
 
@@ -1027,9 +1061,15 @@ class MJGParser:
         cached = self._substitutions_cache.get(date_str)
 
         all_classes_subst: Dict[str, List[Dict[str, Any]]] = {}
+        offline = False
+
+        in_cooldown = (not force_refresh) and now < self._subst_next_retry.get(date_str, 0)
 
         if not force_refresh and cached and (now - cached.get("timestamp", 0)) < SUBSTITUTION_CACHE_TTL:
             all_classes_subst = cached.get("data", {})
+        elif in_cooldown:
+            all_classes_subst = (cached or {}).get("data", {})
+            offline = True
         else:
             fetched_online = False
             try:
@@ -1109,16 +1149,16 @@ class MJGParser:
             except Exception as e:
                 logger.warning(f"Не удалось загрузить замены онлайн ({e}). Пробуем локальный кэш.")
 
-            if not fetched_online:
+            if fetched_online:
+                self._subst_next_retry.pop(date_str, None)
+            else:
+                # Сеть/страница недоступна: берём то, что есть на диске, но НЕ выдаём это за «замен нет»
+                offline = True
+                self._subst_next_retry[date_str] = time.time() + self._retry_cooldown
                 if cached:
                     all_classes_subst = cached.get("data", {})
                 else:
                     all_classes_subst = {}
-                self._substitutions_cache[date_str] = {
-                    "timestamp": now,
-                    "data": all_classes_subst,
-                    "date": date_str
-                }
 
         # Очищаем устаревший плейсхолдер об отсутствии замен из кэша (если попал ранее)
         filtered_subst = {}
@@ -1145,13 +1185,15 @@ class MJGParser:
                 "date": date_str,
                 "class_name": norm_c,
                 "substitutions": class_items,
-                "total_classes_with_subst": len(all_classes_subst)
+                "total_classes_with_subst": len(all_classes_subst),
+                "offline": offline and not cached
             }
 
         return {
             "date": date_str,
             "classes": all_classes_subst,
-            "total_classes_with_subst": len(all_classes_subst)
+            "total_classes_with_subst": len(all_classes_subst),
+            "offline": offline and not cached
         }
 
     # ================= Замены для конкретного учителя =================
@@ -1402,6 +1444,8 @@ class MJGParser:
 
         res = self.get_substitutions(date_str=date_str, class_name=class_name)
         lines = [f"🔄 *Замены уроков на {date_str}*\n"]
+        if res.get("offline"):
+            lines.append("⚠️ _Не удалось связаться с EduPage — данные о заменах могут быть неактуальны._\n")
 
         if class_name:
             norm_c = self.normalize_class_name(class_name)
