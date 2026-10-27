@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import json
 import logging
 import asyncio
@@ -404,6 +405,10 @@ def get_group_chat_keyboard(chat_id: Any) -> InlineKeyboardMarkup:
             InlineKeyboardButton(f"🔄 Замены {c_name}", callback_data=f"grp_subst_{chat_id}")
         ],
         [
+            InlineKeyboardButton("🚪 Свободные кабинеты", callback_data=f"grp_free_{chat_id}"),
+            InlineKeyboardButton("👩‍🏫 Учителя", callback_data="btn_browse_teachers")
+        ],
+        [
             InlineKeyboardButton("⚙️ Сменить класс беседы", callback_data=f"grp_setclass_{chat_id}")
         ]
     ]
@@ -419,6 +424,7 @@ class SeenSubstitutionsTracker:
         self.filepath = filepath
         self.seen_signatures: set = set()
         self._load()
+        self.initialized: bool = len(self.seen_signatures) > 0
 
     def _load(self):
         if os.path.exists(self.filepath):
@@ -737,6 +743,10 @@ def get_teacher_action_keyboard(teacher_name: str, is_own_profile: bool = True) 
                 InlineKeyboardButton("🔄 Мои замены", callback_data="btn_teacher_subst"),
             ],
             [
+                InlineKeyboardButton("🚪 Мои кабинеты", callback_data=f"tv_rm_{teacher_name}"),
+                InlineKeyboardButton("🔍 Где сейчас?", callback_data=f"tv_wh_{teacher_name}"),
+            ],
+            [
                 InlineKeyboardButton("👩‍🏫 Сменить учителя", callback_data="btn_choose_teacher_letters"),
                 InlineKeyboardButton("◀️ Главное меню", callback_data="btn_main_menu")
             ]
@@ -744,12 +754,16 @@ def get_teacher_action_keyboard(teacher_name: str, is_own_profile: bool = True) 
     else:
         keyboard = [
             [
-                InlineKeyboardButton("📅 Уроки сегодня", callback_data=f"tview_today_{teacher_name}"),
-                InlineKeyboardButton("📆 Завтра", callback_data=f"tview_tomorrow_{teacher_name}"),
+                InlineKeyboardButton("📅 Уроки сегодня", callback_data=f"tv_tod_{teacher_name}"),
+                InlineKeyboardButton("📆 Завтра", callback_data=f"tv_tom_{teacher_name}"),
             ],
             [
-                InlineKeyboardButton("🗓 Вся неделя", callback_data=f"tview_week_{teacher_name}"),
-                InlineKeyboardButton("🔄 Замены", callback_data=f"tview_subst_{teacher_name}"),
+                InlineKeyboardButton("🗓 Вся неделя", callback_data=f"tv_wek_{teacher_name}"),
+                InlineKeyboardButton("🔄 Замены", callback_data=f"tv_sub_{teacher_name}"),
+            ],
+            [
+                InlineKeyboardButton("🚪 Кабинеты", callback_data=f"tv_rm_{teacher_name}"),
+                InlineKeyboardButton("🔍 Где сейчас?", callback_data=f"tv_wh_{teacher_name}"),
             ],
             [
                 InlineKeyboardButton("👩‍🏫 Другой учитель", callback_data="btn_browse_teachers"),
@@ -790,11 +804,21 @@ def get_admin_manage_keyboard() -> InlineKeyboardMarkup:
 
 async def safe_reply(update: Update, text: str, reply_markup=None):
     """
-    Безопасная отправка ответа с авто-разбивкой длинных сообщений (>3900 симв.)
-    и fallback на обычный текст при ошибках Markdown.
+    Безопасная и надёжная отправка ответа:
+    1. Авто-разбивка длинных сообщений (>3900 симв.).
+    2. Попытка редактирования сообщения при callback_query.
+    3. Автоматический fallback на отправку нового сообщения при невозможности редактирования
+       (например, сообщение старше 48 часов, фото/медиа или InaccessibleMessage).
+    4. Автоматический fallback на обычный текст при ошибках Markdown.
+    5. Информативный ответ при "message is not modified".
     """
+    chat = update.effective_chat
     target = update.callback_query.message if update.callback_query else update.message
-    if not target:
+    if not chat and target and hasattr(target, "chat"):
+        chat = target.chat
+
+    if not chat and not target:
+        logger.error("safe_reply: Не удалось определить целевой чат или сообщение.")
         return
 
     max_len = 3900
@@ -814,24 +838,61 @@ async def safe_reply(update: Update, text: str, reply_markup=None):
     else:
         chunks = [text]
 
+    can_edit = bool(
+        update.callback_query
+        and target
+        and hasattr(target, "edit_text")
+        and getattr(target, "__class__", type(None)).__name__ != "InaccessibleMessage"
+    )
+
     for i, chunk in enumerate(chunks):
         is_last = (i == len(chunks) - 1)
         mk = reply_markup if is_last else None
 
-        try:
-            if update.callback_query and i == 0:
+        # 1. Попытка редактирования для первого блока callback_query
+        if can_edit and i == 0:
+            try:
                 await target.edit_text(chunk, parse_mode=ParseMode.MARKDOWN, reply_markup=mk)
-            else:
+                continue
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "message is not modified" in err_msg:
+                    if update.callback_query:
+                        try:
+                            await update.callback_query.answer("Вы уже просматриваете этот раздел ✅")
+                        except Exception:
+                            pass
+                    return
+
+                # Пробуем редактирование без Markdown
+                try:
+                    await target.edit_text(chunk, reply_markup=mk)
+                    continue
+                except Exception as e2:
+                    if "message is not modified" in str(e2).lower():
+                        if update.callback_query:
+                            try:
+                                await update.callback_query.answer("Вы уже на этой странице ✅")
+                            except Exception:
+                                pass
+                        return
+                    logger.warning(f"Не удалось отредактировать сообщение ({e2}). Отправляем новым сообщением.")
+
+        # 2. Отправка нового сообщения (или продолжение длинного сообщения)
+        try:
+            if chat and hasattr(chat, "send_message"):
+                await chat.send_message(chunk, parse_mode=ParseMode.MARKDOWN, reply_markup=mk)
+            elif target and hasattr(target, "reply_text"):
                 await target.reply_text(chunk, parse_mode=ParseMode.MARKDOWN, reply_markup=mk)
         except Exception as e:
-            logger.warning(f"Ошибка Markdown: {e}. Отправка в обычном тексте.")
+            logger.warning(f"Ошибка Markdown при отправке ({e}). Отправка обычным текстом.")
             try:
-                if update.callback_query and i == 0:
-                    await target.edit_text(chunk, reply_markup=mk)
-                else:
+                if chat and hasattr(chat, "send_message"):
+                    await chat.send_message(chunk, reply_markup=mk)
+                elif target and hasattr(target, "reply_text"):
                     await target.reply_text(chunk, reply_markup=mk)
-            except Exception as e2:
-                logger.error(f"Не удалось отправить сообщение: {e2}")
+            except Exception as e_final:
+                logger.error(f"Критическая ошибка отправки сообщения: {e_final}")
 
 
 def get_target_date_for_tomorrow() -> date:
@@ -854,6 +915,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
     user = update.effective_user
     user_id = user.id
+    user_prefs.set_user_active(user_id)
 
     if not user_prefs.has_role(user_id):
         welcome_text = (
@@ -1212,14 +1274,27 @@ async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
         return
 
-    if not context.args and role == "teacher":
+    if context.args:
+        arg = " ".join(context.args).strip()
+        t_match = parser.normalize_teacher_name(arg)
+        if t_match:
+            msg = parser.format_teacher_schedule_for_telegram(t_match)
+            await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_match, is_own_profile=False))
+            return
+        norm_class = parser.normalize_class_name(arg)
+        subgroup_filter = user_prefs.get_subgroup_filter(user_id)
+        msg = parser.format_schedule_for_telegram(norm_class, subgroup_filter=subgroup_filter)
+        await safe_reply(update, msg, reply_markup=get_class_action_keyboard(norm_class))
+        return
+
+    if role == "teacher":
         teacher_name = user_prefs.get_teacher(user_id)
         if teacher_name:
             msg = parser.format_teacher_schedule_for_telegram(teacher_name)
             await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(teacher_name, is_own_profile=True))
             return
 
-    class_name = context.args[0] if context.args else user_prefs.get_class(user_id)
+    class_name = user_prefs.get_class(user_id)
     if not class_name:
         await safe_reply(
             update,
@@ -1235,7 +1310,7 @@ async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_substitutions(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /substitutions [класс]"""
+    """Команда /substitutions [класс/учитель]"""
     user_id = update.effective_user.id
     chat = update.effective_chat
     role = user_prefs.get_role(user_id)
@@ -1247,16 +1322,28 @@ async def cmd_substitutions(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
         return
 
-    if not context.args and role == "teacher":
+    if context.args:
+        arg = " ".join(context.args).strip()
+        t_match = parser.normalize_teacher_name(arg)
+        if t_match:
+            msg = parser.format_teacher_substitutions_for_telegram(t_match, date_str=date_str)
+            await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_match, is_own_profile=False))
+            return
+        norm_class = parser.normalize_class_name(arg)
+        msg = parser.format_substitutions_for_telegram(date_str=date_str, class_name=norm_class)
+        await safe_reply(update, msg, reply_markup=get_class_action_keyboard(norm_class))
+        return
+
+    if role == "teacher":
         teacher_name = user_prefs.get_teacher(user_id)
         if teacher_name:
             msg = parser.format_teacher_substitutions_for_telegram(teacher_name, date_str=date_str)
             await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(teacher_name, is_own_profile=True))
             return
 
-    class_name = context.args[0] if context.args else user_prefs.get_class(user_id)
+    class_name = user_prefs.get_class(user_id)
     msg = parser.format_substitutions_for_telegram(date_str=date_str, class_name=class_name)
-    keyboard = get_main_menu_keyboard(user_id)
+    keyboard = get_class_action_keyboard(class_name) if class_name else get_main_menu_keyboard(user_id)
     await safe_reply(update, msg, reply_markup=keyboard)
 
 
@@ -1375,22 +1462,33 @@ async def cmd_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             q = " ".join(context.args).strip().lower()
             if q in ("сегодня", "today"):
                 c_name = bound_class or "8K"
-                msg = parser.format_day_combined_for_telegram(c_name, offset_days=0)
-                await safe_reply(update, msg)
+                msg = parser.format_day_combined_for_telegram(c_name, target_date=date.today())
+                await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
                 return
             elif q in ("завтра", "tomorrow"):
                 c_name = bound_class or "8K"
-                msg = parser.format_day_combined_for_telegram(c_name, offset_days=1)
-                await safe_reply(update, msg)
+                tomorrow_dt = get_target_date_for_tomorrow()
+                msg = parser.format_day_combined_for_telegram(c_name, target_date=tomorrow_dt)
+                await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
                 return
             elif q in ("замены", "substitutions", "зам"):
                 c_name = bound_class or "8K"
-                msg = parser.format_substitutions_for_telegram(c_name)
-                await safe_reply(update, msg)
+                date_str = date.today().strftime("%Y-%m-%d")
+                msg = parser.format_substitutions_for_telegram(date_str=date_str, class_name=c_name)
+                await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
+                return
+            elif q in ("свободные", "кабинеты", "rooms", "freerooms"):
+                msg = parser.format_free_rooms_for_telegram()
+                await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
+                return
+            elif q.startswith("где "):
+                teacher_query = q[4:].strip()
+                msg = parser.format_whereis_teacher_for_telegram(teacher_query)
+                await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
                 return
             else:
                 msg = parser.format_search_for_telegram(q)
-                await safe_reply(update, msg)
+                await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(chat.id))
                 return
 
         if bound_class:
@@ -1569,10 +1667,30 @@ async def cmd_setusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= Обработчик нажатий кнопок (Callback Query) =================
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка всех inline-кнопок"""
+    """Обработка всех inline-кнопок с защитой от сбоев и устаревших запросов"""
     query = update.callback_query
-    await query.answer()
+    if not query:
+        return
 
+    # Отвечаем на query безопасно, чтобы устаревший callback не вызывал исключение
+    try:
+        await query.answer()
+    except Exception as e:
+        logger.debug(f"query.answer non-critical: {e}")
+
+    try:
+        await _process_callback_query(update, context)
+    except Exception as e:
+        logger.error(f"Ошибка при обработке callback_query ({query.data if query else ''}): {e}", exc_info=True)
+        try:
+            await query.answer("⚠️ Произошла ошибка при обработке нажатия кнопки. Пожалуйста, попробуйте снова.", show_alert=True)
+        except Exception:
+            pass
+
+
+async def _process_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Внутренняя логика обработки inline-кнопок"""
+    query = update.callback_query
     data = query.data
     user_id = update.effective_user.id
     role = user_prefs.get_role(user_id)
@@ -1691,16 +1809,123 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return
 
-    # 6. Выбор класса
+    # 6. Выбор класса для ученика
     if data == "btn_choose_grade_group":
         text = "🎒 *Выберите группу классов:*"
         await safe_reply(update, text, reply_markup=get_grade_groups_keyboard())
         return
 
-    if data.startswith("grp_"):
+    if data in ("grp_1_4", "grp_5_9", "grp_10_12"):
         group_name = data.replace("grp_", "")
         text = "🏫 *Выберите ваш класс:*"
         await safe_reply(update, text, reply_markup=get_classes_keyboard(group_name))
+        return
+
+    # 6.1 Интерактивные кнопки групповых чатов
+    if data.startswith("grp_today_"):
+        cid = data.replace("grp_today_", "")
+        c_name = chat_prefs.get_class(cid)
+        if not c_name:
+            await safe_reply(update, "⚠️ К этой беседе пока не привязан класс.\nИспользуйте: `/setclass <класс>`")
+            return
+        msg = parser.format_day_combined_for_telegram(c_name, target_date=date.today())
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(cid))
+        return
+
+    if data.startswith("grp_tomorrow_"):
+        cid = data.replace("grp_tomorrow_", "")
+        c_name = chat_prefs.get_class(cid)
+        if not c_name:
+            await safe_reply(update, "⚠️ К этой беседе пока не привязан класс.\nИспользуйте: `/setclass <класс>`")
+            return
+        tomorrow_dt = get_target_date_for_tomorrow()
+        msg = parser.format_day_combined_for_telegram(c_name, target_date=tomorrow_dt)
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(cid))
+        return
+
+    if data.startswith("grp_schedule_"):
+        cid = data.replace("grp_schedule_", "")
+        c_name = chat_prefs.get_class(cid)
+        if not c_name:
+            await safe_reply(update, "⚠️ К этой беседе пока не привязан класс.\nИспользуйте: `/setclass <класс>`")
+            return
+        msg = parser.format_schedule_for_telegram(c_name)
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(cid))
+        return
+
+    if data.startswith("grp_subst_"):
+        cid = data.replace("grp_subst_", "")
+        c_name = chat_prefs.get_class(cid)
+        date_str = date.today().strftime("%Y-%m-%d")
+        msg = parser.format_substitutions_for_telegram(date_str=date_str, class_name=c_name)
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(cid))
+        return
+
+    if data.startswith("grp_free_"):
+        cid = data.replace("grp_free_", "")
+        msg = parser.format_free_rooms_for_telegram()
+        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(cid))
+        return
+
+    if data.startswith("grp_setclass_"):
+        cid = data.replace("grp_setclass_", "")
+        text = (
+            "⚙️ *Смена класса для этой беседы:*\n\n"
+            "Отправьте в чат команду:\n"
+            "`/setclass <класс>` (например: `/setclass 10A` или `/setclass 8K`).\n\n"
+            "Или выберите ступень классов кнопками ниже:"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎒 1 – 4 классы", callback_data=f"gchat_grp_{cid}_1_4")],
+            [InlineKeyboardButton("📚 5 – 9 классы", callback_data=f"gchat_grp_{cid}_5_9")],
+            [InlineKeyboardButton("🎓 10 – 12 классы", callback_data=f"gchat_grp_{cid}_10_12")],
+            [InlineKeyboardButton("◀️ Отмена", callback_data=f"grp_cancel_{cid}")]
+        ])
+        await safe_reply(update, text, reply_markup=kb)
+        return
+
+    if data.startswith("gchat_grp_"):
+        rest = data.replace("gchat_grp_", "")
+        parts = rest.split("_", 1)
+        cid = parts[0]
+        group_code = parts[1]
+        all_classes = sorted(list(parser.get_classes().keys()))
+        if group_code == "1_4":
+            classes = [c for c in all_classes if any(c.startswith(str(d)) for d in [1, 2, 3, 4])]
+        elif group_code == "5_9":
+            classes = [c for c in all_classes if any(c.startswith(str(d)) for d in [5, 6, 7, 8, 9])]
+        elif group_code == "10_12":
+            classes = [c for c in all_classes if any(c.startswith(str(d)) for d in [10, 11, 12])]
+        else:
+            classes = all_classes
+
+        buttons = []
+        row = []
+        for c in classes:
+            row.append(InlineKeyboardButton(c, callback_data=f"gchat_set_{cid}_{c}"))
+            if len(row) == 3:
+                buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+        buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"grp_setclass_{cid}")])
+        await safe_reply(update, "🏫 *Выберите класс для беседы:*", reply_markup=InlineKeyboardMarkup(buttons))
+        return
+
+    if data.startswith("gchat_set_"):
+        rest = data.replace("gchat_set_", "")
+        parts = rest.split("_", 1)
+        cid = parts[0]
+        chosen_class = parts[1]
+        chat_title = update.effective_chat.title if update.effective_chat else None
+        chat_prefs.set_class(cid, chosen_class, title=chat_title)
+        resp_text = f"✅ Класс *{chosen_class}* успешно привязан к этой беседе!"
+        await safe_reply(update, resp_text, reply_markup=get_group_chat_keyboard(cid))
+        return
+
+    if data.startswith("grp_cancel_"):
+        cid = data.replace("grp_cancel_", "")
+        await safe_reply(update, "Панель управления беседой:", reply_markup=get_group_chat_keyboard(cid))
         return
 
     if data.startswith("set_class_"):
@@ -1763,30 +1988,42 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_name, is_own_profile=False))
         return
 
-    if data.startswith("tview_today_"):
-        t_name = data.replace("tview_today_", "")
+    if data.startswith("tview_today_") or data.startswith("tv_tod_"):
+        t_name = data.replace("tview_today_", "").replace("tv_tod_", "")
         msg = parser.format_teacher_day_combined_for_telegram(t_name, target_date=date.today())
         await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_name, is_own_profile=False))
         return
 
-    if data.startswith("tview_tomorrow_"):
-        t_name = data.replace("tview_tomorrow_", "")
+    if data.startswith("tview_tomorrow_") or data.startswith("tv_tom_"):
+        t_name = data.replace("tview_tomorrow_", "").replace("tv_tom_", "")
         tomorrow_dt = get_target_date_for_tomorrow()
         msg = parser.format_teacher_day_combined_for_telegram(t_name, target_date=tomorrow_dt)
         await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_name, is_own_profile=False))
         return
 
-    if data.startswith("tview_week_"):
-        t_name = data.replace("tview_week_", "")
+    if data.startswith("tview_week_") or data.startswith("tv_wek_"):
+        t_name = data.replace("tview_week_", "").replace("tv_wek_", "")
         msg = parser.format_teacher_schedule_for_telegram(t_name)
         await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_name, is_own_profile=False))
         return
 
-    if data.startswith("tview_subst_"):
-        t_name = data.replace("tview_subst_", "")
+    if data.startswith("tview_subst_") or data.startswith("tv_sub_"):
+        t_name = data.replace("tview_subst_", "").replace("tv_sub_", "")
         date_str = date.today().strftime("%Y-%m-%d")
         msg = parser.format_teacher_substitutions_for_telegram(t_name, date_str=date_str)
         await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_name, is_own_profile=False))
+        return
+
+    if data.startswith("tview_rooms_") or data.startswith("tv_rm_"):
+        t_name = data.replace("tview_rooms_", "").replace("tv_rm_", "")
+        msg = parser.format_teacher_classrooms_for_telegram(t_name)
+        await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_name, is_own_profile=(t_name == user_teacher)))
+        return
+
+    if data.startswith("tview_where_") or data.startswith("tv_wh_"):
+        t_name = data.replace("tview_where_", "").replace("tv_wh_", "")
+        msg = parser.format_whereis_teacher_for_telegram(t_name)
+        await safe_reply(update, msg, reply_markup=get_teacher_action_keyboard(t_name, is_own_profile=(t_name == user_teacher)))
         return
 
     # 9. Действия учителя (свой профиль)
@@ -1903,8 +2140,13 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
     # ================= Панель Администратора =================
 
-    if not admin_manager.is_admin(user_id):
-        return  # Не админ
+    if data.startswith("admin_") or data == "admin_panel":
+        if not admin_manager.is_admin(user_id):
+            try:
+                await query.answer("⛔ Доступ к панели администратора разрешён только администраторам бота.", show_alert=True)
+            except Exception:
+                pass
+            return
 
     if data == "admin_panel":
         context.user_data.pop("admin_state", None)
@@ -1933,7 +2175,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             await safe_reply(update, "⚠️ Текст рассылки не найден. Попробуйте снова.", reply_markup=get_admin_main_keyboard())
             return
 
-        all_users = list(user_prefs.get_all_users().keys())
+        all_users = [k for k in user_prefs.get_all_users().keys() if k.isdigit()]
         total_count = len(all_users)
 
         status_msg = await query.message.reply_text(f"⏳ Начинаем рассылку для {total_count} пользователей...")
@@ -1953,6 +2195,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 success_count += 1
             except Forbidden:
                 blocked_count += 1
+                user_prefs.set_user_inactive(target_uid, reason="blocked")
             except TelegramError:
                 # Попытка отправки без Markdown при ошибке парсинга
                 try:
@@ -1961,6 +2204,9 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         text=f"📢 Объявление от администрации MJG:\n\n{broadcast_text}"
                     )
                     success_count += 1
+                except Forbidden:
+                    blocked_count += 1
+                    user_prefs.set_user_inactive(target_uid, reason="blocked")
                 except Exception:
                     failed_count += 1
             except Exception:
@@ -2071,22 +2317,69 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
     if data == "admin_refresh_cache":
         try:
-            parser.get_regular_timetable(force_refresh=True)
-            parser.get_substitutions(force_refresh=True)
+            await asyncio.to_thread(parser.get_regular_timetable, force_refresh=True)
+            await asyncio.to_thread(parser.get_substitutions, force_refresh=True)
             text = "✅ *Кэш расписания уроков и замен успешно обновлён онлайн с EduPage!*"
         except Exception as e:
             text = f"⚠️ Ошибка при обновлении кэша: {e}"
         await safe_reply(update, text, reply_markup=get_admin_main_keyboard())
         return
 
+    # Если callback_data не распознан ни одной веткой
+    logger.warning(f"Неизвестный callback_data: '{data}' от user_id={user_id}")
+    try:
+        await query.answer("⚠️ Кнопка устарела. Отправьте /start для открытия меню.", show_alert=True)
+    except Exception:
+        pass
+
 
 # ================= Обработка текстовых сообщений =================
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка текста: административные состояния, поиск класса или учителя"""
+    """Обработка текста: административные состояния, поиск класса или учителя, анти-спам в беседах"""
     text = update.message.text.strip()
     user_id = update.effective_user.id
+    chat = update.effective_chat
     admin_state = context.user_data.get("admin_state")
+
+    # В групповых чатах бот не спамит на обычные разговоры
+    if chat.type in ("group", "supergroup"):
+        bot_username = (context.bot.username or "").lower()
+        text_lower = text.lower()
+
+        is_reply_to_bot = bool(
+            update.message.reply_to_message
+            and update.message.reply_to_message.from_user
+            and update.message.reply_to_message.from_user.is_bot
+            and (update.message.reply_to_message.from_user.username or "").lower() == bot_username
+        )
+        is_mentioned = bool(bot_username and f"@{bot_username}" in text_lower)
+        starts_with_bot = text_lower.startswith("бот ") or text_lower == "бот"
+
+        if not (is_reply_to_bot or is_mentioned or starts_with_bot):
+            return
+
+        if bot_username:
+            text = re.sub(rf"@{bot_username}\b", "", text, flags=re.IGNORECASE).strip()
+        text = re.sub(r"^бот\b\s*", "", text, flags=re.IGNORECASE).strip()
+
+        if not text:
+            bound_class = chat_prefs.get_class(chat.id)
+            if bound_class:
+                text_resp = (
+                    f"🤖 *Школьный бот MJG на связи!*\n\n"
+                    f"🏫 Привязанный класс беседы: *{bound_class}*\n"
+                    "Выберите нужное действие на кнопках ниже:"
+                )
+                await safe_reply(update, text_resp, reply_markup=get_group_chat_keyboard(chat.id))
+            else:
+                text_resp = (
+                    "👋 *Приветствую!*\n\n"
+                    "Чтобы привязать класс к этой беседе, напишите команду:\n"
+                    "`/setclass <класс>` (например, `/setclass 10A`)"
+                )
+                await safe_reply(update, text_resp)
+            return
 
     # 1. Если админ вводит текст для рассылки
     if admin_state == "WAITING_BROADCAST_TEXT" and admin_manager.is_admin(user_id):
@@ -2124,7 +2417,42 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await safe_reply(update, resp, reply_markup=get_admin_manage_keyboard())
         return
 
-    # 3. Проверяем, ввел ли пользователь класс (например "10A", "8k", "1-a")
+    # 3. Быстрая обработка текстовых кнопок и команд на русском языке
+    clean_lower = text.lower().strip()
+    clean_no_emoji = re.sub(r'^[^\w\s]+', '', clean_lower).strip()
+
+    if clean_lower in ("сегодня", "📅 сегодня", "today") or clean_no_emoji == "сегодня":
+        await cmd_today(update, context)
+        return
+    if clean_lower in ("завтра", "📆 завтра", "tomorrow") or clean_no_emoji == "завтра":
+        await cmd_tomorrow(update, context)
+        return
+    if clean_lower in ("расписание", "🗓 расписание", "schedule", "вся неделя", "неделя") or clean_no_emoji in ("расписание", "вся неделя", "неделя"):
+        await cmd_schedule(update, context)
+        return
+    if clean_lower in ("замены", "🔄 замены", "substitutions", "zameni") or clean_no_emoji == "замены":
+        await cmd_substitutions(update, context)
+        return
+    if clean_lower in ("учителя", "👩‍🏫 учителя", "teachers") or clean_no_emoji == "учителя":
+        await cmd_teachers(update, context)
+        return
+    if clean_lower in ("кабинеты", "🚪 кабинеты", "свободные кабинеты", "rooms", "freerooms") or clean_no_emoji in ("кабинеты", "свободные кабинеты"):
+        await cmd_freerooms(update, context)
+        return
+    if clean_lower in ("меню", "🏠 меню", "главное меню", "menu", "старт", "start") or clean_no_emoji in ("меню", "главное меню", "старт"):
+        await cmd_start(update, context)
+        return
+    if clean_lower in ("профиль", "⚙️ профиль", "настройки", "мои настройки", "profile", "settings") or clean_no_emoji in ("профиль", "настройки"):
+        await cmd_profile(update, context)
+        return
+    if clean_lower in ("помощь", "❓ помощь", "help") or clean_no_emoji == "помощь":
+        await cmd_help(update, context)
+        return
+    if (clean_lower in ("админ", "👑 админ", "админка", "admin") or clean_no_emoji in ("админ", "админка")) and admin_manager.is_admin(user_id):
+        await cmd_admin(update, context)
+        return
+
+    # 4. Проверяем, ввел ли пользователь класс (например "10A", "8k", "1-a")
     norm_class = parser.normalize_class_name(text)
     available_classes = parser.get_classes()
 
@@ -2138,7 +2466,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await safe_reply(update, resp_text, reply_markup=get_class_action_keyboard(norm_class))
         return
 
-    # 4. Проверяем, ввел ли пользователь фамилию преподавателя
+    # 5. Проверяем, ввел ли пользователь фамилию преподавателя
     matched_teacher = parser.normalize_teacher_name(text)
     if matched_teacher:
         role = user_prefs.get_role(user_id)
@@ -2187,7 +2515,7 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
         new_items_by_date: Dict[str, List[Dict[str, Any]]] = {}
 
         for d_str in dates_to_check:
-            res = parser.get_substitutions(date_str=d_str, force_refresh=True)
+            res = await asyncio.to_thread(parser.get_substitutions, date_str=d_str, force_refresh=True)
             all_classes = res.get("classes", {})
 
             for c_name, items in all_classes.items():
@@ -2201,8 +2529,9 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
 
         seen_tracker.save()
 
-        # Первый запуск трекера — только инициализация
-        if len(seen_tracker.seen_signatures) <= sum(len(v) for v in new_items_by_date.values()):
+        # Первый запуск трекера — только инициализация, если не был инициализирован ранее
+        if not seen_tracker.initialized:
+            seen_tracker.initialized = True
             logger.info("Инициализация списка замен завершена, ожидание новых публикаций.")
             return
 
@@ -2212,9 +2541,10 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"Обнаружено {total_new} новых замен уроков! Начинаем рассылку подписчикам...")
 
+        # 1. Рассылка пользователям (ученикам и учителям)
         all_users = user_prefs.get_all_users()
         for uid_str, u_pref in all_users.items():
-            if not u_pref.get("notifications", True):
+            if not u_pref.get("is_active", True) or not u_pref.get("notifications", True):
                 continue
 
             try:
@@ -2229,7 +2559,7 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
                 else:
                     role = "student"
 
-            # 1. Уведомление для Ученика
+            # 1.1 Уведомление для Ученика
             if role == "student":
                 u_class = u_pref.get("class_name")
                 if not u_class:
@@ -2260,7 +2590,7 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
                         except (Forbidden, TelegramError) as e:
                             logger.warning(f"Не удалось отправить уведомление пользователю {user_id}: {e}")
 
-            # 2. Уведомление для Учителя
+            # 1.2 Уведомление для Учителя
             elif role == "teacher":
                 u_teacher = u_pref.get("teacher_name")
                 if not u_teacher:
@@ -2302,8 +2632,74 @@ async def check_new_substitutions_job(context: ContextTypes.DEFAULT_TYPE):
                         except (Forbidden, TelegramError) as e:
                             logger.warning(f"Не удалось отправить уведомление учителю {user_id}: {e}")
 
+        # 2. Рассылка по групповым чатам классов
+        all_chats = chat_prefs.get_all_chats()
+        for cid_str, c_pref in all_chats.items():
+            if not c_pref.get("notifications", True):
+                continue
+            try:
+                group_chat_id = int(cid_str)
+            except ValueError:
+                continue
+
+            bound_class = c_pref.get("class_name")
+            if not bound_class:
+                continue
+
+            for d_str, items in new_items_by_date.items():
+                group_items = [it for it in items if it["class_name"] == bound_class or it["class_name"] == "Все"]
+                if group_items:
+                    lines = [
+                        "🔔 *Внимание! Новые замены уроков!*",
+                        f"🏫 Беседа класса: *{bound_class}*",
+                        f"📅 Дата: *{d_str}*\n"
+                    ]
+                    for it in group_items:
+                        icon = "❌" if it["type"] == "remove" else "⚠️" if it["type"] == "absent" else "🔄"
+                        p_txt = f"{it['period']} урок: " if it.get("period") else ""
+                        lines.append(f"{icon} *{p_txt}*{it['info']}")
+
+                    lines.append("\n_Нажмите кнопки ниже для просмотра расписания:_")
+                    msg = "\n".join(lines)
+                    try:
+                        await context.bot.send_message(
+                            chat_id=group_chat_id,
+                            text=msg,
+                            parse_mode=ParseMode.MARKDOWN,
+                            reply_markup=get_group_chat_keyboard(group_chat_id)
+                        )
+                    except Exception as e:
+                        logger.warning(f"Не удалось отправить уведомление в группу {group_chat_id}: {e}")
+
     except Exception as e:
         logger.error(f"Ошибка в фоновой проверке замен: {e}", exc_info=True)
+
+
+# ================= Глобальный обработчик ошибок =================
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Глобальный обработчик исключений: логирует ошибку и предотвращает
+    зависание индикатора загрузки на кнопках Telegram.
+    """
+    logger.error("Необработанное исключение в обработчике Telegram:", exc_info=context.error)
+
+    if isinstance(update, Update):
+        if update.callback_query:
+            try:
+                await update.callback_query.answer(
+                    "⚠️ Произошла ошибка. Пожалуйста, попробуйте нажать кнопку ещё раз или отправьте /start.",
+                    show_alert=True
+                )
+            except Exception:
+                pass
+        if update.effective_chat:
+            try:
+                await update.effective_chat.send_message(
+                    "⚠️ Произошла временная ошибка при обработке команды. Отправьте /start для перезапуска меню."
+                )
+            except Exception:
+                pass
 
 
 # ================= Главная функция запуска бота =================
@@ -2321,6 +2717,9 @@ def main():
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
+    # Регистрация глобального перехватчика ошибок
+    app.add_error_handler(error_handler)
+
     # Регистрация пользовательских команд
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler(["profile", "role", "settings"], cmd_profile))
@@ -2335,6 +2734,14 @@ def main():
     app.add_handler(CommandHandler("tomorrow", cmd_tomorrow))
     app.add_handler(CommandHandler("schedule", cmd_schedule))
     app.add_handler(CommandHandler(["substitutions", "replacements", "zameni"], cmd_substitutions))
+    app.add_handler(CommandHandler(["bot", "call", "mjg", "parcer", "raspisanie"], cmd_bot))
+    app.add_handler(CommandHandler("room", cmd_room))
+    app.add_handler(CommandHandler("rooms", cmd_rooms))
+    app.add_handler(CommandHandler(["freerooms", "free"], cmd_freerooms))
+    app.add_handler(CommandHandler(["whereis", "gde"], cmd_whereis))
+    app.add_handler(CommandHandler(["search", "find", "poisk"], cmd_search))
+    app.add_handler(CommandHandler("stats", cmd_stats))
+    app.add_handler(CommandHandler(["stop", "leave"], cmd_stop))
 
     # Регистрация команд администратора
     app.add_handler(CommandHandler("admin", cmd_admin))

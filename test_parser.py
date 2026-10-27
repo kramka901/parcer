@@ -257,6 +257,42 @@ def run_tests():
     assert "8K" in s_class["classes"], "Поиск должен найти класс 8K!"
     print("  ✅ Универсальный поиск успешно находит учителей, кабинеты и классы!")
 
+    # 13. Тест безопасности длины callback_data для Telegram API (макс. 64 байта)
+    print("\n[ТЕСТ 13] Безопасность длины callback_data для всех учителей (лимит 64 байта):")
+    from bot import get_teacher_action_keyboard
+    for t_name in parser.get_teachers().keys():
+        for is_own in (True, False):
+            t_kb = get_teacher_action_keyboard(t_name, is_own_profile=is_own)
+            for row in t_kb.inline_keyboard:
+                for btn in row:
+                    cb_len = len(btn.callback_data.encode("utf-8"))
+                    assert cb_len <= 64, f"callback_data '{btn.callback_data}' превышает 64 байта ({cb_len})!"
+    print("  ✅ Все callback_data кнопок преподавателей укладываются в лимит 64 байта!")
+
+    # 14. Тест фильтрации служебных сообщений EduPage об отсутствии замен
+    print("\n[ТЕСТ 14] Фильтрация сообщений об отсутствии замен:")
+    empty_subst_msg = parser.format_substitutions_for_telegram(date_str="2026-10-26")
+    assert "BCE" not in empty_subst_msg, "Класс 'BCE' не должен появляться при отсутствии замен!"
+    assert "Sellel päeval pole tühistatud tunde" not in empty_subst_msg, "Служебный текст EduPage не должен отображаться как замена!"
+    assert "замен и отмен уроков в школе нет" in empty_subst_msg, "Должно быть сообщение об отсутствии замен!"
+    print("  ✅ Служебные строки EduPage корректно фильтруются!")
+
+    # 15. Тест расширенной нормализации классов (дефисы с пробелами)
+    print("\n[ТЕСТ 15] Расширенная нормализация классов (дефисы с пробелами):")
+    assert parser.normalize_class_name("7 - 8e") == "7-8E"
+    assert parser.normalize_class_name("4 - 5 e") == "4-5E"
+    assert parser.normalize_class_name("10 - a") == "10A"
+    assert parser.normalize_class_name("8 - k") == "8K"
+    print("  ✅ Варианты написания классов с пробелами вокруг дефиса успешно нормализуются!")
+
+    # 16. Тест свободных кабинетов и форматирования где находится учитель
+    print("\n[ТЕСТ 16] Проверка свободных кабинетов и поиска учителя (/freerooms, /whereis):")
+    free_msg = parser.format_free_rooms_for_telegram()
+    assert "Свободные кабинеты школы MJG" in free_msg, "Сообщение о свободных кабинетах должно формироваться корректно!"
+    where_msg = parser.format_whereis_teacher_for_telegram("Kulakova Dariya")
+    assert "Kulakova Dariya" in where_msg, "Сообщение о местонахождении учителя должно содержать имя учителя!"
+    print("  ✅ Форматирование свободных кабинетов и статуса учителя работает безупречно!")
+
     print("=" * 65)
     print("🎉 ВСЕ ТЕСТЫ БОТА, ПАРСЕРА, ПОДГРУПП И АДМИН-ПАНЕЛИ УСПЕШНО ПРОЙДЕНЫ!")
     print("=" * 65)

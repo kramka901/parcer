@@ -1,6 +1,6 @@
 {
   "2026-09-25": {
-    "timestamp": 1790368823.796415,
+    "timestamp": 1793030302.3039808,
     "data": {
       "10A": [
         {
@@ -339,20 +339,12 @@
     "date": "2026-09-25"
   },
   "2026-09-27": {
-    "timestamp": 1790460869.6820264,
-    "data": {
-      "BCE": [
-        {
-          "period": "",
-          "info": "Sellel päeval pole tühistatud tunde või asendusi.",
-          "type": "change"
-        }
-      ]
-    },
+    "timestamp": 1793030302.9113982,
+    "data": {},
     "date": "2026-09-27"
   },
   "2026-09-29": {
-    "timestamp": 1790704851.7039945,
+    "timestamp": 1793030303.0466795,
     "data": {
       "10A": [
         {
@@ -693,7 +685,7 @@
     "date": "2026-09-29"
   },
   "2026-09-30": {
-    "timestamp": 1790795905.411122,
+    "timestamp": 1793030303.1976316,
     "data": {
       "10A": [
         {
@@ -915,7 +907,7 @@
     "date": "2026-09-30"
   },
   "2026-10-01": {
-    "timestamp": 1790795906.1934795,
+    "timestamp": 1793030303.3273509,
     "data": {
       "10A": [
         {
@@ -1060,7 +1052,7 @@
       "5K": [
         {
           "period": "3",
-          "info": "Inglise keel - Asendused: (Cojuhari Veronika) ➔ Jastrebova Svetlana",
+          "info": "Inglise keel - Asendused: (Cojuhari Veronika) ➔ Jastrebova Svetlana, Vaheta ruumi: (107) ➔ 308",
           "type": "change"
         },
         {
@@ -1113,7 +1105,7 @@
     "date": "2026-10-01"
   },
   "2026-10-21": {
-    "timestamp": 1792611685.349166,
+    "timestamp": 1793030303.4754956,
     "data": {
       "10A": [
         {
@@ -1309,16 +1301,36 @@
     "date": "2026-10-21"
   },
   "2026-10-26": {
-    "timestamp": 1793008884.183462,
+    "timestamp": 1793094880.1484141,
+    "data": {},
+    "date": "2026-10-26"
+  },
+  "2026-10-27": {
+    "timestamp": 1793095200.9631205,
+    "data": {},
+    "date": "2026-10-27"
+  },
+  "2026-10-22": {
+    "timestamp": 9999999999,
     "data": {
-      "BCE": [
+      "8K": [
         {
-          "period": "",
-          "info": "Sellel päeval pole tühistatud tunde või asendusi.",
+          "period": "3 - 4",
+          "info": "Замена сдвоенного урока",
           "type": "change"
+        },
+        {
+          "period": "(7)",
+          "info": "Отмена 7 урока",
+          "type": "remove"
         }
       ]
     },
-    "date": "2026-10-26"
+    "date": "2026-10-22"
+  },
+  "2026-10-28": {
+    "timestamp": 1793094874.4867954,
+    "data": {},
+    "date": "2026-10-28"
   }
 }

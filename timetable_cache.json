@@ -659,69 +659,6 @@
       "surname": "Ionova",
       "firstname": "",
       "short": "Ionova"
-    },
-    "1. tund 8.30 – 9.15": {
-      "id": "1. tund 8.30 – 9.15",
-      "name": "1. tund 8.30 – 9.15",
-      "surname": "1. tund",
-      "firstname": "8.30 – 9.15",
-      "short": "1. tund"
-    },
-    "2. tund 9.25 – 10.10": {
-      "id": "2. tund 9.25 – 10.10",
-      "name": "2. tund 9.25 – 10.10",
-      "surname": "2. tund",
-      "firstname": "9.25 – 10.10",
-      "short": "2. tund"
-    },
-    "3. tund 10.35 – 11.20": {
-      "id": "3. tund 10.35 – 11.20",
-      "name": "3. tund 10.35 – 11.20",
-      "surname": "3. tund",
-      "firstname": "10.35 – 11.20",
-      "short": "3. tund"
-    },
-    "4. tund 11.45 – 12.30": {
-      "id": "4. tund 11.45 – 12.30",
-      "name": "4. tund 11.45 – 12.30",
-      "surname": "4. tund",
-      "firstname": "11.45 – 12.30",
-      "short": "4. tund"
-    },
-    "5. tund 12.55 – 13.40": {
-      "id": "5. tund 12.55 – 13.40",
-      "name": "5. tund 12.55 – 13.40",
-      "surname": "5. tund",
-      "firstname": "12.55 – 13.40",
-      "short": "5. tund"
-    },
-    "6. tund 13.50 – 14.35": {
-      "id": "6. tund 13.50 – 14.35",
-      "name": "6. tund 13.50 – 14.35",
-      "surname": "6. tund",
-      "firstname": "13.50 – 14.35",
-      "short": "6. tund"
-    },
-    "7. tund 14.45 – 15.30": {
-      "id": "7. tund 14.45 – 15.30",
-      "name": "7. tund 14.45 – 15.30",
-      "surname": "7. tund",
-      "firstname": "14.45 – 15.30",
-      "short": "7. tund"
-    },
-    "8. tund 15.40 – 16.25": {
-      "id": "8. tund 15.40 – 16.25",
-      "name": "8. tund 15.40 – 16.25",
-      "surname": "8. tund",
-      "firstname": "15.40 – 16.25",
-      "short": "8. tund"
-    },
-    "© Tallinna Mustjõe Gümnaasium (+372) 6 566 468": {
-      "id": "© Tallinna Mustjõe Gümnaasium (+372) 6 566 468",
-      "name": "© Tallinna Mustjõe Gümnaasium (+372) 6 566 468",
-      "surname": "© Tallinna Mustjõe Gümnaasium",
-      "firstname": "(+372) 6 566 468",
-      "short": "© Tallinna Mustjõe Gümnaasium"
     }
   },
   "schedule": {
@@ -3127,7 +3064,7 @@
             "time": "12:55-13:40",
             "subject": "Inimeseõpetus",
             "teachers": [
-              "Timusk Annika"
+              "Leonova Julia"
             ],
             "classrooms": [
               "209"
@@ -4128,7 +4065,7 @@
               "Petrosjan Olga"
             ],
             "classrooms": [
-              "116"
+              "309"
             ],
             "group": "5E"
           }
@@ -5290,7 +5227,7 @@
               "Petrosjan Olga"
             ],
             "classrooms": [
-              "116"
+              "309"
             ],
             "group": "5E"
           }
@@ -8380,7 +8317,7 @@
               "Jurgenovskene Ljubov"
             ],
             "classrooms": [
-              "314"
+              "304"
             ],
             "group": "Rühm 1"
           }
@@ -11319,20 +11256,6 @@
             "group": ""
           }
         ],
-        "7": [
-          {
-            "period": 7,
-            "time": "14:40-15:25",
-            "subject": "Kirjandus",
-            "teachers": [
-              "Grihhina Irina"
-            ],
-            "classrooms": [
-              "110"
-            ],
-            "group": ""
-          }
-        ],
         "6": [
           {
             "period": 6,
@@ -11561,6 +11484,20 @@
             ],
             "classrooms": [
               "307"
+            ],
+            "group": ""
+          }
+        ],
+        "1": [
+          {
+            "period": 1,
+            "time": "08:30-09:15",
+            "subject": "Kirjandus",
+            "teachers": [
+              "Grihhina Irina"
+            ],
+            "classrooms": [
+              "110"
             ],
             "group": ""
           }
@@ -17944,7 +17881,190 @@
   },
   "meta": {
     "default_num": "37",
-    "timetables": [],
+    "timetables": [
+      {
+        "tt_num": "12",
+        "year": 2024,
+        "text": "03.09 (02. 09. - 06. 09. 2024)",
+        "datefrom": "2024-09-02",
+        "hidden": true
+      },
+      {
+        "tt_num": "13",
+        "year": 2024,
+        "text": "I trim tunniplaan (07. 09. - 13. 09. 2024)",
+        "datefrom": "2024-09-07",
+        "hidden": true
+      },
+      {
+        "tt_num": "14",
+        "year": 2024,
+        "text": "I trimestri tunniplaan L (14. 09. - 12. 10. 2024)",
+        "datefrom": "2024-09-14",
+        "hidden": true
+      },
+      {
+        "tt_num": "15",
+        "year": 2024,
+        "text": "I timestri tunniplaan 14.10 - (13. 10. - 08. 11. 2024)",
+        "datefrom": "2024-10-13",
+        "hidden": true
+      },
+      {
+        "tt_num": "16",
+        "year": 2024,
+        "text": "Tunniplaan 11.11- (11. 11. - 19. 11. 2024)",
+        "datefrom": "2024-11-11",
+        "hidden": true
+      },
+      {
+        "tt_num": "17",
+        "year": 2024,
+        "text": "Tunniplaan 18.11-22.11 (20. 11. - 22. 11. 2024)",
+        "datefrom": "2024-11-20",
+        "hidden": true
+      },
+      {
+        "tt_num": "18",
+        "year": 2024,
+        "text": "Tunniplaan 25.11- (23. 11. - 23. 12. 2024)",
+        "datefrom": "2024-11-23",
+        "hidden": true
+      },
+      {
+        "tt_num": "19",
+        "year": 2024,
+        "text": "Tunniplaan 06.01-17.01 (03. 01. - 17. 01. 2025)",
+        "datefrom": "2025-01-03",
+        "hidden": true
+      },
+      {
+        "tt_num": "20",
+        "year": 2024,
+        "text": "Tunniplaan 20.01-24.01 (18. 01. - 24. 01. 2025)",
+        "datefrom": "2025-01-18",
+        "hidden": true
+      },
+      {
+        "tt_num": "21",
+        "year": 2024,
+        "text": "Tunniplaan 27.01-28.02 (25. 01. - 28. 02. 2025)",
+        "datefrom": "2025-01-25",
+        "hidden": true
+      },
+      {
+        "tt_num": "22",
+        "year": 2024,
+        "text": "Tunniplaan al 03.02 (01. 02. - 01. 03. 2025)",
+        "datefrom": "2025-02-01",
+        "hidden": true
+      },
+      {
+        "tt_num": "23",
+        "year": 2024,
+        "text": "Tunniplaan al 03.03 (02. 03. - 16. 04. 2025)",
+        "datefrom": "2025-03-02",
+        "hidden": true
+      },
+      {
+        "tt_num": "24",
+        "year": 2024,
+        "text": "Tunniplaan al 21.04 (17. 04. - 10. 06. 2025)",
+        "datefrom": "2025-04-17",
+        "hidden": true
+      },
+      {
+        "tt_num": "25",
+        "year": 2025,
+        "text": "01_05 sept 2025 (01. 09. - 05. 09. 2025)",
+        "datefrom": "2025-09-01",
+        "hidden": true
+      },
+      {
+        "tt_num": "26",
+        "year": 2025,
+        "text": "Tunniplaan alates 07_sept_2025 (06. 09. - 27. 09. 2025)",
+        "datefrom": "2025-09-06",
+        "hidden": true
+      },
+      {
+        "tt_num": "27",
+        "year": 2025,
+        "text": "Tunniplaan alates 29.09 (28. 09. - 07. 11. 2025)",
+        "datefrom": "2025-09-28",
+        "hidden": true
+      },
+      {
+        "tt_num": "28",
+        "year": 2025,
+        "text": "Tunniplaan al 10.11 (08. 11. 2025 - 09. 01. 2026)",
+        "datefrom": "2025-11-08",
+        "hidden": true
+      },
+      {
+        "tt_num": "29",
+        "year": 2025,
+        "text": "Tunniplaan al 12.01 (10. 01. - 17. 01. 2026)",
+        "datefrom": "2026-01-10",
+        "hidden": true
+      },
+      {
+        "tt_num": "30",
+        "year": 2025,
+        "text": "Tunniplaan al 19.01 (18. 01. - 23. 01. 2026)",
+        "datefrom": "2026-01-18",
+        "hidden": true
+      },
+      {
+        "tt_num": "31",
+        "year": 2025,
+        "text": "Tunniplaan al 26.01 (24. 01. - 30. 01. 2026)",
+        "datefrom": "2026-01-24",
+        "hidden": true
+      },
+      {
+        "tt_num": "32",
+        "year": 2025,
+        "text": "Tunniplaan al 02.02 (31. 01. - 27. 02. 2026)",
+        "datefrom": "2026-01-31",
+        "hidden": true
+      },
+      {
+        "tt_num": "33",
+        "year": 2025,
+        "text": "Tunniplaan al 02.03 (28. 02. - 21. 03. 2026)",
+        "datefrom": "2026-02-28",
+        "hidden": true
+      },
+      {
+        "tt_num": "34",
+        "year": 2025,
+        "text": "Tunniplaan al 02.03_ujula (22. 03. 2026-?)",
+        "datefrom": "2026-03-22",
+        "hidden": true
+      },
+      {
+        "tt_num": "35",
+        "year": 2026,
+        "text": "Tunniplaan 02.09 2026 (01. 09. - 04. 09. 2026)",
+        "datefrom": "2026-09-01",
+        "hidden": true
+      },
+      {
+        "tt_num": "36",
+        "year": 2026,
+        "text": "Tunniplaan 07.09 2026 (06. 09. - 11. 09. 2026)",
+        "datefrom": "2026-09-06",
+        "hidden": true
+      },
+      {
+        "tt_num": "37",
+        "year": 2026,
+        "text": "Tunniplaan al 14.09 (12. 09. - 22. 12. 2026)",
+        "datefrom": "2026-09-12",
+        "hidden": false
+      }
+    ],
     "year": 2026
   }
 }

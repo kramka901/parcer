@@ -72,6 +72,8 @@ def build_cache_from_raw():
 
     for tid, t in teachers_map.items():
         short = t.get("short", "").strip()
+        if "tund" in short.lower() or "tallinna" in short.lower():
+            continue
         match = t_by_surname.get(short.lower())
         if match:
             full_name = match["full_name"]
@@ -81,6 +83,9 @@ def build_cache_from_raw():
             surname = short or tid
             firstname = ""
             full_name = surname
+
+        if "tund" in full_name.lower() or "tallinna" in full_name.lower():
+            continue
 
         teachers_dict[full_name] = {
             "id": tid,
@@ -94,6 +99,8 @@ def build_cache_from_raw():
     # Добавляем остальных учителей из teachers.json, которых нет в raw
     for t in t_list:
         fname = t["full_name"]
+        if "tund" in fname.lower() or "tallinna" in fname.lower():
+            continue
         if fname not in teachers_dict:
             teachers_dict[fname] = {
                 "id": fname,

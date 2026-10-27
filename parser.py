@@ -78,7 +78,8 @@ def parse_period_numbers(period_str: str) -> List[int]:
     """
     if not period_str:
         return []
-    s = str(period_str).strip().strip("()")
+    s = str(period_str).strip().strip("()").strip()
+    s = re.sub(r'(\d+)\.', r'\1', s)
     if not s:
         return []
     range_match = re.match(r"^(\d+)\s*[-–—]\s*(\d+)$", s)
@@ -91,7 +92,7 @@ def parse_period_numbers(period_str: str) -> List[int]:
     if "," in s:
         res = []
         for part in s.split(","):
-            part_s = part.strip()
+            part_s = part.strip().strip("().")
             if part_s.isdigit():
                 res.append(int(part_s))
         return res
@@ -246,7 +247,11 @@ class MJGParser:
         }
         for r, e in ru_to_en.items():
             name = name.replace(r, e)
+        # Убираем пробелы вокруг любых дефисов: '7 - 8E' -> '7-8E', '10 - A' -> '10-A'
+        name = re.sub(r'\s*-\s*', '-', name)
+        # Убираем пробелы между цифрой и буквой: '10 A' -> '10A', '7-8 E' -> '7-8E'
         name = re.sub(r'(\d+)\s+([A-ZА-ЯЁ])', r'\1\2', name)
+        # Убираем дефис между числом и буквой: '10-A' -> '10A'
         if re.match(r'^\d+-[A-ZА-ЯЁ]$', name):
             name = name.replace('-', '')
         return name
@@ -343,27 +348,30 @@ class MJGParser:
     def get_timetable_meta(self) -> Dict[str, Any]:
         """Получает метаданные расписания (номер актуального расписания tt_num и учебный год)"""
         current_year = date.today().year
+        years_to_try = [current_year, current_year - 1] if date.today().month < 8 else [current_year]
         gsechash = self._get_gsec_hash()
 
-        payload = {
-            "__args": [None, current_year],
-            "__gsh": gsechash
-        }
+        for yr in years_to_try:
+            payload = {
+                "__args": [None, yr],
+                "__gsh": gsechash
+            }
 
-        try:
-            resp = self.session.post(TT_VIEWER_RPC_URL, json=payload, timeout=REQUEST_TIMEOUT)
-            if resp.status_code == 200:
-                data = resp.json().get("r", {})
-                regular = data.get("regular", {})
-                default_num = str(regular.get("default_num", "37"))
-                timetables = regular.get("timetables", [])
-                return {
-                    "default_num": default_num,
-                    "timetables": timetables,
-                    "year": current_year
-                }
-        except Exception as e:
-            logger.warning(f"Не удалось получить метаданные расписания онлайн: {e}")
+            try:
+                resp = self.session.post(TT_VIEWER_RPC_URL, json=payload, timeout=REQUEST_TIMEOUT)
+                if resp.status_code == 200:
+                    data = resp.json().get("r", {})
+                    regular = data.get("regular", {})
+                    timetables = regular.get("timetables", [])
+                    if timetables:
+                        default_num = str(regular.get("default_num", "37"))
+                        return {
+                            "default_num": default_num,
+                            "timetables": timetables,
+                            "year": yr
+                        }
+            except Exception as e:
+                logger.warning(f"Не удалось получить метаданные расписания онлайн для {yr}: {e}")
 
         return {
             "default_num": "37",
@@ -458,6 +466,8 @@ class MJGParser:
 
                     for tid, t in teachers_map.items():
                         short = t.get("short", "").strip()
+                        if "tund" in short.lower() or "tallinna" in short.lower():
+                            continue
                         match = t_by_surname.get(short.lower())
                         if match:
                             full_name = match["full_name"]
@@ -467,6 +477,9 @@ class MJGParser:
                             surname = short or tid
                             firstname = ""
                             full_name = surname
+
+                        if "tund" in full_name.lower() or "tallinna" in full_name.lower():
+                            continue
 
                         teachers_dict[full_name] = {
                             "id": tid,
@@ -480,6 +493,8 @@ class MJGParser:
                     # Добавляем остальных учителей из teachers.json
                     for t in t_list:
                         fname = t["full_name"]
+                        if "tund" in fname.lower() or "tallinna" in fname.lower():
+                            continue
                         if fname not in teachers_dict:
                             teachers_dict[fname] = {
                                 "id": fname,
@@ -834,15 +849,19 @@ class MJGParser:
         periods = tt.get("periods", {})
 
         parsed_periods = []
-        for p_str, p_info in sorted(periods.items(), key=lambda x: int(x[0])):
+        valid_periods = [(k, v) for k, v in periods.items() if str(k).isdigit()]
+        for p_str, p_info in sorted(valid_periods, key=lambda x: int(x[0])):
             st = p_info.get("starttime", "")
             et = p_info.get("endtime", "")
-            if st and et:
-                s_parts = [int(x) for x in st.split(":")]
-                e_parts = [int(x) for x in et.split(":")]
-                s_min = s_parts[0] * 60 + s_parts[1]
-                e_min = e_parts[0] * 60 + e_parts[1]
-                parsed_periods.append((int(p_str), s_min, e_min, st, et))
+            if st and et and ":" in st and ":" in et:
+                try:
+                    s_parts = [int(x) for x in st.split(":")]
+                    e_parts = [int(x) for x in et.split(":")]
+                    s_min = s_parts[0] * 60 + s_parts[1]
+                    e_min = e_parts[0] * 60 + e_parts[1]
+                    parsed_periods.append((int(p_str), s_min, e_min, st, et))
+                except (ValueError, IndexError):
+                    continue
 
         if not parsed_periods:
             return None, "unknown", None
@@ -1032,7 +1051,10 @@ class MJGParser:
                         for sec in sections:
                             header = sec.find("div", class_="header")
                             raw_cname = header.get_text(strip=True) if header else "Все"
-                            norm_cname = self.normalize_class_name(raw_cname)
+                            if raw_cname.strip().lower() in ("все", "все классы", "kõik", "kõik klassid", "bce"):
+                                norm_cname = "Все"
+                            else:
+                                norm_cname = self.normalize_class_name(raw_cname)
 
                             items = []
                             rows = sec.find_all("div", class_="row")
@@ -1049,6 +1071,22 @@ class MJGParser:
 
                                 period = period_el.get_text(strip=True) if period_el else ""
                                 info = info_el.get_text(" ", strip=True) if info_el else ""
+
+                                # Проверяем, не является ли строка служебным уведомлением об отсутствии замен
+                                info_clean = info.strip().lower()
+                                if any(phrase in info_clean for phrase in [
+                                    "pole tühistatud tunde",
+                                    "asendusi ei ole",
+                                    "pole asendusi",
+                                    "puuduvad asendused",
+                                    "sellel päeval pole",
+                                    "asendused puuduvad",
+                                    "ei ole asendusi",
+                                    "tühistatud tunde pole",
+                                    "нет замен",
+                                    "нет отмен"
+                                ]):
+                                    continue
 
                                 items.append({
                                     "period": period,
@@ -1075,19 +1113,34 @@ class MJGParser:
                 if cached:
                     all_classes_subst = cached.get("data", {})
                 else:
-                    for k in sorted(self._substitutions_cache.keys(), reverse=True):
-                        if self._substitutions_cache[k].get("data"):
-                            all_classes_subst = self._substitutions_cache[k]["data"]
-                            break
+                    all_classes_subst = {}
                 self._substitutions_cache[date_str] = {
                     "timestamp": now,
                     "data": all_classes_subst,
                     "date": date_str
                 }
 
+        # Очищаем устаревший плейсхолдер об отсутствии замен из кэша (если попал ранее)
+        filtered_subst = {}
+        for c_k, c_v in all_classes_subst.items():
+            valid_items = [
+                it for it in c_v
+                if not any(phrase in it.get("info", "").lower() for phrase in [
+                    "pole tühistatud tunde", "asendusi ei ole", "pole asendusi", "puuduvad asendused", "sellel päeval pole"
+                ])
+            ]
+            if valid_items:
+                filtered_subst[c_k] = valid_items
+        all_classes_subst = filtered_subst
+
         if class_name:
             norm_c = self.normalize_class_name(class_name)
-            class_items = all_classes_subst.get(norm_c, [])
+            class_items = list(all_classes_subst.get(norm_c, []))
+            # Если есть общие объявления школы (в секции "Все"), добавляем их
+            general_items = all_classes_subst.get("Все", []) or all_classes_subst.get("BCE", [])
+            for g_item in general_items:
+                if g_item not in class_items:
+                    class_items.append(g_item)
             return {
                 "date": date_str,
                 "class_name": norm_c,
@@ -1648,6 +1701,17 @@ class MJGParser:
         period_num: Optional[int] = None
     ) -> str:
         """Форматирует список свободных кабинетов для Telegram"""
+        now = datetime.now()
+        effective_day = day_index if day_index is not None else now.weekday()
+        if effective_day >= 5:
+            day_label = "Суббота" if effective_day == 5 else "Воскресенье"
+            return (
+                f"🏖 *Свободные кабинеты школы MJG*\n"
+                f"📅 {day_label} (Выходной день)\n\n"
+                f"В выходные дни все учебные кабинеты школы свободны!\n\n"
+                f"💡 _Чтобы посмотреть расписание кабинета на учебную неделю, напишите `/room <номер>` (напр. `/room 204`)_"
+            )
+
         res = self.get_free_classrooms(day_index=day_index, period_num=period_num)
         p_num = res["period_num"]
         time_str = f" ({res['time_str']})" if res.get("time_str") else ""

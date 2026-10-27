@@ -9,6 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Безопасный импорт python-dotenv
 try:
     from dotenv import load_dotenv
@@ -219,7 +224,9 @@ WEEKDAYS_RU = [
     "Вторник",
     "Среда",
     "Четверг",
-    "Пятница"
+    "Пятница",
+    "Суббота",
+    "Воскресенье"
 ]
 
 WEEKDAYS_SHORT_RU = ["Пн", "Вт", "Ср", "Чт", "Пт"]

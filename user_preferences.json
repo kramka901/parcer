@@ -1,10 +1,9 @@
 {
   "1637426603": {
     "role": "student",
-    "notifications": true,
-    "class_name": "8K",
-    "subgroup_gender": "boys",
-    "is_active": true
+    "notifications": false,
+    "is_active": true,
+    "class_name": "10A"
   },
   "999999999": {
     "notifications": false,
