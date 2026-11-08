@@ -3387,6 +3387,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if clean_lower in ("кабинеты", "🚪 кабинеты", "свободные кабинеты", "rooms", "freerooms") or clean_no_emoji in ("кабинеты", "свободные кабинеты"):
         await cmd_freerooms(update, context)
         return
+    if clean_lower in ("звонки", "🔔 звонки", "звонок", "расписание звонков", "bells", "/звонки", "/звонок") or clean_no_emoji in ("звонки", "звонок", "расписание звонков"):
+        await cmd_bells(update, context)
+        return
     if clean_lower in ("меню", "🏠 меню", "главное меню", "menu", "старт", "start") or clean_no_emoji in ("меню", "главное меню", "старт"):
         await cmd_start(update, context)
         return
@@ -3685,7 +3688,7 @@ def main():
     app.add_handler(CommandHandler("today", cmd_today))
     app.add_handler(CommandHandler("tomorrow", cmd_tomorrow))
     app.add_handler(CommandHandler(["schedule", "week", "nedelya"], cmd_schedule))
-    app.add_handler(CommandHandler(["bells", "bell", "звонки", "звонок", "uroki", "time"], cmd_bells))
+    app.add_handler(CommandHandler(["bells", "bell", "uroki", "time", "calls"], cmd_bells))
     app.add_handler(CommandHandler(["substitutions", "replacements", "zameni"], cmd_substitutions))
     app.add_handler(CommandHandler(["bot", "call", "mjg", "parcer", "raspisanie"], cmd_bot))
     app.add_handler(CommandHandler("room", cmd_room))

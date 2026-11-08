@@ -1301,7 +1301,7 @@
     "date": "2026-10-21"
   },
   "2026-10-26": {
-    "timestamp": 1794173207.921902,
+    "timestamp": 1794173699.955867,
     "data": {},
     "date": "2026-10-26"
   },
@@ -1332,5 +1332,142 @@
     "timestamp": 1793100076.9931827,
     "data": {},
     "date": "2026-10-28"
+  },
+  "2026-11-09": {
+    "timestamp": 1794174164.9351969,
+    "data": {
+      "10A": [
+        {
+          "period": "3",
+          "info": "Matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Volossova Olga",
+          "type": "change"
+        },
+        {
+          "period": "4",
+          "info": "Matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Tesla Aleksander",
+          "type": "change"
+        },
+        {
+          "period": "8",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Voskoboinikov Vladimir",
+          "type": "change"
+        }
+      ],
+      "10B": [
+        {
+          "period": "3",
+          "info": "Projektijuhtimine - Õpetaja: Korzoun Tatiana, Vaheta ruumi: (Arvutiklass) ➔ 206",
+          "type": "change"
+        }
+      ],
+      "10C": [
+        {
+          "period": "3",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Voskoboinikov Vladimir",
+          "type": "change"
+        }
+      ],
+      "11A": [
+        {
+          "period": "2",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Voskoboinikov Vladimir",
+          "type": "change"
+        },
+        {
+          "period": "6",
+          "info": "Matemaatika - Asendused: (Jasjukevitš Oksana) ➔ Svarval Svetlana",
+          "type": "change"
+        },
+        {
+          "period": "(7)",
+          "info": "Rühm 1: Arvuti kasutamine uurimistöös - Jasjukevitš Oksana, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "11B": [
+        {
+          "period": "3",
+          "info": "Matemaatika - Asendused: (Maksimova Margarita) ➔ Tesla Aleksander",
+          "type": "change"
+        }
+      ],
+      "11C": [
+        {
+          "period": "2",
+          "info": "Rühm 2: Arvuti kasutamine uurimistöös - Asendused: (Jasjukevitš Oksana) ➔ Kulakova Dariya",
+          "type": "change"
+        },
+        {
+          "period": "2",
+          "info": "Rühm 1: Inglise keel - Õpetaja: Kulakova Dariya, Vaheta ruumi: (106) ➔ 208",
+          "type": "change"
+        }
+      ],
+      "5A": [
+        {
+          "period": "3",
+          "info": "Matemaatika - Õpetaja: Einasto Natalie, Vaheta ruumi: (206) ➔ 308",
+          "type": "change"
+        }
+      ],
+      "6B": [
+        {
+          "period": "2",
+          "info": "Informaatika - Asendused: (Maksimova Margarita) ➔ Tesla Aleksander, Vaheta ruumi: (Arvutiklass) ➔ 205",
+          "type": "change"
+        }
+      ],
+      "7-8E": [
+        {
+          "period": "(6 - 7)",
+          "info": "Kehaline kasvatus - Trjapitškina Jekaterina, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "8A": [
+        {
+          "period": "(1)",
+          "info": "Rühm 2: Informaatika - Jasjukevitš Oksana, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "8K": [
+        {
+          "period": "1",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Kivimets Raiko",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Rühm 2: Eesti keel teise keelena - Õpetaja: Üksiratsa Elona, Vaheta ruumi: (317) ➔ 208",
+          "type": "change"
+        },
+        {
+          "period": "5",
+          "info": "Rühm 1: Informaatika - Asendused: (Jasjukevitš Oksana) ➔ Üksiratsa Elona",
+          "type": "change"
+        }
+      ],
+      "9E": [
+        {
+          "period": "(6 - 7)",
+          "info": "Kehaline kasvatus - Trjapitškina Jekaterina, Tühistatud",
+          "type": "remove"
+        }
+      ],
+      "9K": [
+        {
+          "period": "5",
+          "info": "Tüdrukud: Kehaline kasvatus - Asendused: (Trjapitškina Jekaterina) ➔ Kivimets Raiko",
+          "type": "change"
+        }
+      ]
+    },
+    "date": "2026-11-09"
+  },
+  "2026-11-08": {
+    "timestamp": 1794174164.0196872,
+    "data": {},
+    "date": "2026-11-08"
   }
 }

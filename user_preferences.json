@@ -2,14 +2,18 @@
   "1637426603": {
     "user_id": "1637426603",
     "telegram_id": 1637426603,
+    "username": "aouxod",
+    "first_name": "World",
+    "last_name": "",
+    "full_name": "World",
     "is_bot": false,
     "role": "student",
-    "class_name": "10A",
-    "notifications": false,
+    "class_name": "8K",
+    "notifications": true,
     "is_active": true,
     "created_at": "2026-11-08 22:20:40",
-    "updated_at": "2026-11-08 22:40:40",
-    "last_seen": "2026-11-08 22:20:40"
+    "updated_at": "2026-11-08 23:38:08",
+    "last_seen": "2026-11-08 23:37:34"
   },
   "_meta": {
     "target_count": 0
