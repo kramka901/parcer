@@ -22,6 +22,8 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
+    ChatMember,
+    ChatMemberUpdated,
 )
 from telegram.constants import ParseMode
 from telegram.error import TelegramError, Forbidden, Conflict, NetworkError, TimedOut
@@ -30,12 +32,15 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
+    ChatMemberHandler,
+    TypeHandler,
     ContextTypes,
     filters
 )
 
 from config import (
     TELEGRAM_BOT_TOKEN,
+    DATABASE_FILE,
     USER_DATA_FILE,
     USER_BACKUP_FILE,
     CHAT_DATA_FILE,
@@ -48,6 +53,7 @@ from config import (
     get_env_diagnostic_info
 )
 from parser import MJGParser
+from database import db, Database
 
 # Настройка логирования
 logging.basicConfig(
@@ -72,120 +78,42 @@ async def pcall(func, *args, **kwargs):
 # ================= Управление администраторами =================
 
 class AdminManager:
-    """Управление списком администраторов бота (сохранение в admins.json)"""
+    """Управление списком администраторов бота через SQLite базу данных"""
 
-    def __init__(self, filepath=ADMINS_FILE, initial_admins=None):
-        self.filepath = filepath
-        self.admins: set = set(initial_admins or DEFAULT_ADMIN_IDS)
-        self._load()
+    def __init__(self, database: Database = db):
+        self.db = database
 
-    def _load(self):
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for a in data.get("admins", []):
-                        try:
-                            self.admins.add(int(a))
-                        except (ValueError, TypeError):
-                            pass
-            except Exception as e:
-                logger.error(f"Ошибка загрузки admins.json: {e}")
-        else:
-            self._save()
+    def is_admin(self, user_id: Any) -> bool:
+        return self.db.is_admin(user_id)
 
-    def _save(self):
-        try:
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump({"admins": sorted(list(self.admins))}, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Ошибка сохранения admins.json: {e}")
+    def add_admin(self, user_id: Any) -> bool:
+        return self.db.add_admin(user_id)
 
-    def is_admin(self, user_id: int) -> bool:
-        return int(user_id) in self.admins
-
-    def add_admin(self, user_id: int) -> bool:
-        uid = int(user_id)
-        if uid not in self.admins:
-            self.admins.add(uid)
-            self._save()
-            return True
-        return False
-
-    def remove_admin(self, user_id: int) -> bool:
-        uid = int(user_id)
-        if len(self.admins) <= 1:
-            return False  # Нельзя удалить последнего администратора
-        if uid in self.admins:
-            self.admins.remove(uid)
-            self._save()
-            return True
-        return False
+    def remove_admin(self, user_id: Any) -> bool:
+        return self.db.remove_admin(user_id)
 
     def get_admins(self) -> List[int]:
-        return sorted(list(self.admins))
+        return self.db.get_admins()
 
 
 admin_manager = AdminManager()
 
 
-# ================= Управление пользовательскими данными =================
+# ================= Управление пользовательскими данными и аккаунтами =================
 
 class UserPreferences:
-    """Управление сохранёнными настройками пользователей (роль: ученик/учитель, класс, уведомления, подгруппы)"""
+    """Управление сохранёнными настройками пользователей и аккаунтами через SQLite базу данных"""
 
-    def __init__(self, filepath=USER_DATA_FILE, backup_filepath=USER_BACKUP_FILE):
-        self.filepath = filepath
-        self.backup_filepath = backup_filepath
-        self._data: Dict[str, Dict[str, Any]] = {}
-        self._target_count: int = INITIAL_USER_COUNT
-        self._load()
+    def __init__(self, database: Database = db):
+        self.db = database
 
-    def _load(self):
-        loaded = False
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, "r", encoding="utf-8") as f:
-                    self._data = json.load(f)
-                    loaded = True
-            except Exception as e:
-                logger.error(f"Ошибка чтения настроек пользователей: {e}")
-
-        if not loaded and os.path.exists(self.backup_filepath):
-            try:
-                with open(self.backup_filepath, "r", encoding="utf-8") as f:
-                    self._data = json.load(f)
-                    loaded = True
-            except Exception as e:
-                logger.error(f"Ошибка чтения резервной копии настроек: {e}")
-
-        if not loaded:
-            self._data = {}
-
-        meta = self._data.get("_meta", {})
-        if "target_count" in meta:
-            try:
-                self._target_count = int(meta["target_count"])
-            except (ValueError, TypeError):
-                self._target_count = INITIAL_USER_COUNT
-        else:
-            self._target_count = INITIAL_USER_COUNT
-
-    def _save(self):
-        try:
-            self._data.setdefault("_meta", {})["target_count"] = self._target_count
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, ensure_ascii=False, indent=2)
-            try:
-                with open(self.backup_filepath, "w", encoding="utf-8") as bf:
-                    json.dump(self._data, bf, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error(f"Ошибка сохранения настроек пользователей: {e}")
+    @property
+    def _data(self) -> Dict[str, Dict[str, Any]]:
+        return self.db.get_accounts_dict()
 
     def get_user(self, user_id: Any) -> Dict[str, Any]:
-        return self._data.get(str(user_id), {})
+        acc = self.db.get_account(user_id)
+        return acc if acc else {}
 
     def has_role(self, user_id: Any) -> bool:
         """Проверяет, выбрал ли пользователь уже роль и сущность"""
@@ -215,54 +143,22 @@ class UserPreferences:
         return self.get_user(user_id).get("teacher_name")
 
     def set_student(self, user_id: Any, class_name: str):
-        uid = str(user_id)
-        if uid not in self._data:
-            self._data[uid] = {}
-        self._data[uid]["role"] = "student"
-        self._data[uid]["class_name"] = class_name
-        self._data[uid]["is_active"] = True
-        self._data[uid].pop("inactive_reason", None)
-        self._data[uid].pop("teacher_name", None)
-        if "notifications" not in self._data[uid]:
-            self._data[uid]["notifications"] = True
-        self._save()
+        self.db.set_student(user_id, class_name)
 
     def set_teacher(self, user_id: Any, teacher_name: str):
-        uid = str(user_id)
-        if uid not in self._data:
-            self._data[uid] = {}
-        self._data[uid]["role"] = "teacher"
-        self._data[uid]["teacher_name"] = teacher_name
-        self._data[uid]["is_active"] = True
-        self._data[uid].pop("inactive_reason", None)
-        self._data[uid].pop("class_name", None)
-        if "notifications" not in self._data[uid]:
-            self._data[uid]["notifications"] = True
-        self._save()
+        self.db.set_teacher(user_id, teacher_name)
 
     def reset_role(self, user_id: Any):
-        uid = str(user_id)
-        if uid in self._data:
-            self._data[uid].pop("role", None)
-            self._data[uid].pop("class_name", None)
-            self._data[uid].pop("teacher_name", None)
-            self._save()
+        self.db.reset_role(user_id)
 
     def is_notifications_enabled(self, user_id: Any) -> bool:
         return self.get_user(user_id).get("notifications", True)
 
     def set_notifications(self, user_id: Any, enabled: bool):
-        uid = str(user_id)
-        if uid not in self._data:
-            self._data[uid] = {}
-        self._data[uid]["notifications"] = enabled
-        self._save()
+        self.db.set_notifications(user_id, enabled)
 
     def toggle_notifications(self, user_id: Any) -> bool:
-        current = self.is_notifications_enabled(user_id)
-        new_val = not current
-        self.set_notifications(user_id, new_val)
-        return new_val
+        return self.db.toggle_notifications(user_id)
 
     # Настройки подгрупп
     def get_subgroup_filter(self, user_id: Any) -> Dict[str, str]:
@@ -275,57 +171,28 @@ class UserPreferences:
         return filt
 
     def set_gender_filter(self, user_id: Any, gender: Optional[str]):
-        uid = str(user_id)
-        if uid not in self._data:
-            self._data[uid] = {}
-        if gender in ("boys", "girls"):
-            self._data[uid]["subgroup_gender"] = gender
-        else:
-            self._data[uid].pop("subgroup_gender", None)
-        self._save()
+        self.db.set_gender_filter(user_id, gender)
 
     def set_academic_filter(self, user_id: Any, academic: Optional[str]):
-        uid = str(user_id)
-        if uid not in self._data:
-            self._data[uid] = {}
-        if academic in ("1", "2"):
-            self._data[uid]["subgroup_academic"] = academic
-        else:
-            self._data[uid].pop("subgroup_academic", None)
-        self._save()
+        self.db.set_academic_filter(user_id, academic)
 
     def get_all_users(self) -> Dict[str, Dict[str, Any]]:
-        return {k: v for k, v in self._data.items() if not k.startswith("_")}
+        return self.db.get_accounts_dict()
 
     def get_active_users_count(self) -> int:
-        inactive_count = sum(
-            1 for k, v in self._data.items()
-            if not k.startswith("_") and v.get("is_active") is False
-        )
-        real_users = [k for k in self._data if not k.startswith("_") and not k.startswith("saved_user_")]
-        base = max(self._target_count, len(real_users))
-        return max(0, base - inactive_count)
+        return self.db.get_active_users_count()
 
     def set_user_inactive(self, user_id: Any, reason: str = "blocked"):
-        uid = str(user_id)
-        if uid not in self._data:
-            self._data[uid] = {}
-        self._data[uid]["is_active"] = False
-        self._data[uid]["inactive_reason"] = reason
-        self._data[uid]["notifications"] = False
-        self._save()
+        self.db.record_user_departure(user_id, reason=reason)
 
     def set_user_active(self, user_id: Any):
-        uid = str(user_id)
-        if uid not in self._data:
-            self._data[uid] = {}
-        self._data[uid]["is_active"] = True
-        self._data[uid].pop("inactive_reason", None)
-        self._save()
+        self.db.save_account_data(user_id, is_active=1, inactive_reason=None)
 
     def set_target_count(self, target: int):
-        self._target_count = int(target)
-        self._save()
+        self.db.set_target_count(target)
+
+    def delete_user(self, user_id: Any) -> bool:
+        return self.db.delete_account(user_id)
 
 
 user_prefs = UserPreferences()
@@ -334,69 +201,32 @@ user_prefs = UserPreferences()
 # ================= Управление групповыми чатами =================
 
 class ChatPreferences:
-    """Управление настройками групповых бесед и каналов (привязка класса к группе, уведомления)"""
+    """Управление настройками групповых бесед и каналов через SQLite базу данных"""
 
-    def __init__(self, filepath=CHAT_DATA_FILE):
-        self.filepath = filepath
-        self._data: Dict[str, Dict[str, Any]] = {}
-        self._load()
-
-    def _load(self):
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, "r", encoding="utf-8") as f:
-                    self._data = json.load(f)
-            except Exception as e:
-                logger.error(f"Ошибка чтения настроек групповых чатов: {e}")
-                self._data = {}
-
-    def _save(self):
-        try:
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, ensure_ascii=False, indent=2)
-            try:
-                with open(self.filepath.with_suffix(".json.bak"), "w", encoding="utf-8") as bf:
-                    json.dump(self._data, bf, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error(f"Ошибка сохранения настроек групповых чатов: {e}")
+    def __init__(self, database: Database = db):
+        self.db = database
 
     def get_chat(self, chat_id: Any) -> Dict[str, Any]:
-        return self._data.get(str(chat_id), {})
+        return self.db.get_chat(chat_id)
 
     def get_class(self, chat_id: Any) -> Optional[str]:
-        return self.get_chat(chat_id).get("class_name")
+        return self.db.get_chat(chat_id).get("class_name")
 
     def set_class(self, chat_id: Any, class_name: str, title: Optional[str] = None):
-        cid = str(chat_id)
-        if cid not in self._data:
-            self._data[cid] = {}
-        self._data[cid]["class_name"] = class_name
-        if title:
-            self._data[cid]["title"] = title
-        if "notifications" not in self._data[cid]:
-            self._data[cid]["notifications"] = True
-        self._save()
+        self.db.set_chat_class(chat_id, class_name, title=title)
 
     def remove_chat(self, chat_id: Any):
-        cid = str(chat_id)
-        if cid in self._data:
-            self._data.pop(cid, None)
-            self._save()
+        self.db.remove_chat(chat_id)
 
     def is_notifications_enabled(self, chat_id: Any) -> bool:
-        return self.get_chat(chat_id).get("notifications", True)
+        chat = self.get_chat(chat_id)
+        return bool(chat.get("notifications", True)) if chat else True
 
     def set_notifications(self, chat_id: Any, enabled: bool):
-        cid = str(chat_id)
-        if cid not in self._data:
-            self._data[cid] = {}
-        self._data[cid]["notifications"] = enabled
-        self._save()
+        self.db.set_chat_notifications(chat_id, enabled)
 
     def get_all_chats(self) -> Dict[str, Dict[str, Any]]:
-        return {k: v for k, v in self._data.items() if not k.startswith("_")}
+        return self.db.get_all_chats()
 
 
 chat_prefs = ChatPreferences()
@@ -794,6 +624,10 @@ def get_admin_main_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📊 Статистика бота", callback_data="admin_stats"),
             InlineKeyboardButton("🔄 Обновить кэш EduPage", callback_data="admin_refresh_cache"),
         ],
+        [
+            InlineKeyboardButton("👤 База аккаунтов", callback_data="admin_accounts_list"),
+            InlineKeyboardButton("📈 История приходов/уходов", callback_data="admin_events_history"),
+        ],
         [InlineKeyboardButton("◀️ Выйти в главное меню", callback_data="btn_main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -933,7 +767,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
     user = update.effective_user
     user_id = user.id
-    user_prefs.set_user_active(user_id)
+    # Сохраняем аккаунт пользователя и регистрируем событие прихода с подсчётом аудитории
+    db.record_user_arrival(user, source="/start", details="Запуск бота через команду /start")
 
     if not user_prefs.has_role(user_id):
         welcome_text = (
@@ -1007,10 +842,13 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_extra = (
         "\n👑 *Команды администратора:*\n"
         "• /admin — Открыть панель администратора\n"
+        "• /accounts или /users — Список сохранённых аккаунтов в базе данных\n"
+        "• /history или /events — Журнал прихода и ухода пользователей с числом пользователей\n"
         "• /broadcast `<текст>` — Разослать сообщение всем пользователям\n"
         "• /addadmin `<ID>` — Добавить нового администратора\n"
         "• /deladmin `<ID>` — Удалить администратора\n"
         "• /admins — Список администраторов бота\n"
+        "• /setusers `<число>` — Установить целевое число пользователей\n"
     ) if is_admin else ""
 
     text = (
@@ -1441,19 +1279,38 @@ async def cmd_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Статистика пользователей и школьной базы: /stats"""
     active_users = user_prefs.get_active_users_count()
-    all_users = len(user_prefs.get_all_users())
+    summary = db.get_events_stats_summary()
+    total_accounts = summary["total_accounts"]
+    inactive_users = summary["inactive_users"]
+    joined_today = summary["joined_today"]
+    left_today = summary["left_today"]
+    total_events = summary["total_events"]
+
     total_chats = len(chat_prefs.get_all_chats())
     total_classes = len((await pcall(parser.get_classes)))
     total_teachers = len((await pcall(parser.get_teachers)))
     total_rooms = len((await pcall(parser.get_all_classrooms)))
     cached_subst_dates = len(parser._substitutions_cache)
 
+    recent_events = db.get_user_events(limit=3)
+    ev_lines = []
+    for ev in recent_events:
+        sign = "🟢 +" if ev["event_type"] in ("JOINED", "RETURNED") else "🔴 −"
+        uname = f"@{ev['username']}" if ev.get("username") else (ev.get("full_name") or ev["user_id"])
+        ev_lines.append(f"• {sign} {uname} ({ev['event_type']}, активных: {ev['active_users_count']})")
+    events_str = ("\n" + "\n".join(ev_lines)) if ev_lines else "\n• _нет недавних событий_"
+
     text = (
         "📊 *Статистика Telegram-бота Tallinna Mustjõe Gümnaasium:*\n\n"
-        f"👥 *Пользователи:*\n"
+        f"👥 *Пользователи и аккаунты:*\n"
         f"• Активных пользователей: *{active_users}*\n"
-        f"• Всего зарегистрировано: *{all_users}*\n"
-        f"• Подключенных групповых бесед: *{total_chats}*\n\n"
+        f"• Всего аккаунтов в базе SQLite: *{total_accounts}*\n"
+        f"• Неактивных (отписались/заблокировали): *{inactive_users}*\n"
+        f"• Пришло за сегодня: *+{joined_today}*\n"
+        f"• Ушло за сегодня: *−{left_today}*\n"
+        f"• Подключенных групповых бесед: *{total_chats}*\n"
+        f"• Всего зафиксировано событий: *{total_events}*\n\n"
+        f"📈 *Последние события аудитории:*{events_str}\n\n"
         f"🏫 *Школьная база данных:*\n"
         f"• Классов в школе: *{total_classes}*\n"
         f"• Преподавателей: *{total_teachers}*\n"
@@ -1466,15 +1323,108 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выход и отписка от бота: /stop или /leave"""
-    user_id = update.effective_user.id
-    user_prefs.set_user_inactive(user_id, reason="user_stop")
+    user = update.effective_user
+    user_id = user.id
+    db.record_user_departure(
+        user_id=user_id,
+        reason="user_stop",
+        username=user.username,
+        full_name=user.full_name,
+        details="Пользователь отписался через команду /stop"
+    )
     text = (
         "👋 *Вы успешно отписались от бота.*\n\n"
         "• Все авто-уведомления отключены.\n"
-        "• Ваш профиль деактивирован, счётчик активных пользователей обновлён.\n\n"
+        "• Ваш профиль деактивирован, счётчик активных пользователей обновлён в базе данных.\n\n"
         "Чтобы снова начать пользоваться ботом и получать расписание, просто отправьте /start в любое время!"
     )
     await safe_reply(update, text)
+
+
+async def cmd_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /accounts или /users: список аккаунтов пользователей в базе данных (для админов)"""
+    user_id = update.effective_user.id
+    if not admin_manager.is_admin(user_id):
+        await safe_reply(update, "⛔ *Доступ запрещён.* Эта команда доступна только администраторам бота.")
+        return
+
+    accounts = db.get_all_accounts()
+    active_accs = [a for a in accounts if a.get("is_active")]
+    real_accs = [a for a in accounts if not a["user_id"].startswith("saved_user_")]
+
+    lines = [
+        "👥 *База сохранённых аккаунтов пользователей:*\n",
+        f"• Всего аккаунтов в SQLite: *{len(accounts)}*",
+        f"• Активных пользователей: *{len(active_accs)}*",
+        f"• Реальных профилей Telegram: *{len(real_accs)}*\n",
+        "📋 *Последние активные аккаунты:*"
+    ]
+
+    for i, acc in enumerate(real_accs[:12], 1):
+        status = "🟢" if acc.get("is_active") else "🔴"
+        uname = f"@{acc['username']}" if acc.get("username") else "без @username"
+        role_info = (
+            f"👩‍🏫 {acc['teacher_name']}"
+            if acc.get("role") == "teacher"
+            else f"👨‍🎓 {acc.get('class_name') or 'класс не выбран'}"
+        )
+        notif_st = "🔔" if acc.get("notifications") else "🔕"
+        last_dt = (acc.get("last_seen") or "—")[:16]
+        lines.append(
+            f"{i}. {status} *{acc.get('full_name') or 'Пользователь'}* ({uname})\n"
+            f"   └ ID: `{acc['user_id']}` | {role_info} | {notif_st} | Визит: `{last_dt}`"
+        )
+
+    text = "\n".join(lines)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📈 История приходов/уходов", callback_data="admin_events_history")],
+        [InlineKeyboardButton("◀️ В админ-панель", callback_data="admin_panel")]
+    ])
+    await safe_reply(update, text, reply_markup=keyboard)
+
+
+async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /history или /events: журнал прихода и ухода пользователей с числом пользователей (для админов)"""
+    user_id = update.effective_user.id
+    if not admin_manager.is_admin(user_id):
+        await safe_reply(update, "⛔ *Доступ запрещён.* Эта команда доступна только администраторам бота.")
+        return
+
+    events = db.get_user_events(limit=12)
+    lines = [
+        "📈 *Журнал прихода и ухода пользователей:*\n",
+        "Каждое событие фиксирует точное число активных пользователей и общий размер базы:\n"
+    ]
+
+    if not events:
+        lines.append("_Событий пока не зафиксировано._")
+    else:
+        for ev in events:
+            ev_type = ev.get("event_type", "EVENT")
+            if ev_type in ("JOINED", "RETURNED"):
+                icon = "🟢 ➕"
+            elif ev_type in ("LEFT", "BLOCKED", "STOPPED"):
+                icon = "🔴 ➖"
+            else:
+                icon = "⚙️"
+
+            uname = f" (@{ev['username']})" if ev.get("username") else ""
+            user_title = f"{ev.get('full_name') or ev['user_id']}{uname}"
+            time_str = (ev.get("timestamp") or "")[5:16]
+
+            lines.append(
+                f"{icon} *{ev_type}* | `{time_str}`\n"
+                f"   👤 {user_title} (ID: `{ev['user_id']}`)\n"
+                f"   👥 *Активных: {ev['active_users_count']}* | Всего в базе: {ev['total_users_count']}\n"
+                f"   _{ev.get('details') or ''}_\n"
+            )
+
+    text = "\n".join(lines)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👤 База аккаунтов", callback_data="admin_accounts_list")],
+        [InlineKeyboardButton("◀️ В админ-панель", callback_data="admin_panel")]
+    ])
+    await safe_reply(update, text, reply_markup=keyboard)
 
 
 async def cmd_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2346,31 +2296,29 @@ async def _process_callback_query(update: Update, context: ContextTypes.DEFAULT_
         return
 
     if data == "admin_stats":
-        all_u = user_prefs.get_all_users()
-        total_u = len(all_u)
-        students_c = sum(1 for u in all_u.values() if u.get("role") == "student" or u.get("class_name"))
-        teachers_c = sum(1 for u in all_u.values() if u.get("role") == "teacher" or u.get("teacher_name"))
-        notif_c = sum(1 for u in all_u.values() if u.get("notifications", True))
-        admins_c = len(admin_manager.get_admins())
-
+        stats_text = admin_stats_text()
         classes = (await pcall(parser.get_classes))
         teachers = (await pcall(parser.get_teachers))
-
-        text = (
-            "📊 *Статистика Telegram-бота MJG:*\n\n"
-            f"👥 Всего пользователей: *{total_u}*\n"
-            f"👨‍🎓 Учеников / родителей: *{students_c}*\n"
-            f"👩‍🏫 Преподавателей: *{teachers_c}*\n"
-            f"🔔 С включенными уведомлениями: *{notif_c}*\n"
-            f"👑 Администраторов: *{admins_c}*\n\n"
+        extra_info = (
             f"🏫 Классов в базе: *{len(classes)}*\n"
             f"👩‍🏫 Преподавателей в базе: *{len(teachers)}*\n"
         )
+        full_text = f"{stats_text}\n{extra_info}"
         keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👤 База аккаунтов", callback_data="admin_accounts_list")],
+            [InlineKeyboardButton("📈 История приходов/уходов", callback_data="admin_events_history")],
             [InlineKeyboardButton("🔄 Обновить кэш EduPage", callback_data="admin_refresh_cache")],
             [InlineKeyboardButton("◀️ Назад в админ-панель", callback_data="admin_panel")]
         ])
-        await safe_reply(update, text, reply_markup=keyboard)
+        await safe_reply(update, full_text, reply_markup=keyboard)
+        return
+
+    if data == "admin_accounts_list":
+        await cmd_accounts(update, context)
+        return
+
+    if data == "admin_events_history":
+        await cmd_history(update, context)
         return
 
     if data == "admin_refresh_cache":
@@ -2607,13 +2555,38 @@ def admin_stats_text() -> str:
     students_c = sum(1 for u in all_u.values() if u.get("role") == "student" or u.get("class_name"))
     teachers_c = sum(1 for u in all_u.values() if u.get("role") == "teacher" or u.get("teacher_name"))
     notif_c = sum(1 for u in all_u.values() if u.get("notifications", True))
+    admins_c = len(admin_manager.get_admins())
+
+    summary = db.get_events_stats_summary()
+    active_users = user_prefs.get_active_users_count()
+    total_accounts = summary["total_accounts"]
+    inactive_users = summary["inactive_users"]
+    joined_today = summary["joined_today"]
+    left_today = summary["left_today"]
+    total_events = summary["total_events"]
+
+    recent_events = db.get_user_events(limit=3)
+    ev_lines = []
+    for ev in recent_events:
+        sign = "🟢 +" if ev["event_type"] in ("JOINED", "RETURNED") else "🔴 −"
+        uname = f"@{ev['username']}" if ev.get("username") else (ev.get("full_name") or ev["user_id"])
+        ev_lines.append(f"  {sign} {uname} ({ev['event_type']}, активных: {ev['active_users_count']})")
+    events_str = ("\n" + "\n".join(ev_lines)) if ev_lines else "\n  _нет событий_"
+
     return (
-        "📊 *Статистика Telegram-бота MJG:*\n\n"
-        f"👥 Всего пользователей: *{len(all_u)}*\n"
+        "📊 *Статистика Telegram-бота MJG (SQLite База данных):*\n\n"
+        f"👥 *Пользователи и аккаунты:*\n"
+        f"• Активных пользователей: *{active_users}*\n"
+        f"• Всего аккаунтов в базе: *{total_accounts}*\n"
+        f"• Неактивных (ушли/блок): *{inactive_users}*\n"
+        f"• Пришло за сегодня: *+{joined_today}*\n"
+        f"• Ушло за сегодня: *−{left_today}*\n"
+        f"• Зафиксировано событий: *{total_events}*\n\n"
         f"👨‍🎓 Учеников / родителей: *{students_c}*\n"
         f"👩‍🏫 Преподавателей: *{teachers_c}*\n"
         f"🔔 С включенными уведомлениями: *{notif_c}*\n"
-        f"👑 Администраторов: *{len(admin_manager.get_admins())}*\n"
+        f"👑 Администраторов: *{admins_c}*\n\n"
+        f"📈 *Последние события аудитории:*{events_str}\n"
     )
 
 
@@ -3064,6 +3037,65 @@ ALL_BUTTON_LABELS = {
 } | set(GROUP_LABELS) | set(LETTER_LABELS)
 
 
+async def track_user_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Автоматически сохраняет и актуализирует аккаунты всех пользователей
+    при любом их действии (сообщения, команды, нажатия кнопок).
+    """
+    user = update.effective_user
+    if user and not user.is_bot:
+        db.record_user_interaction(user, source="interaction")
+
+
+async def handle_my_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Отслеживает события изменения статуса участника (приход и уход пользователей):
+    - Когда пользователь заблокировал бота или нажал 'Остановить бота' (LEFT / BANNED / KICKED).
+    - Когда пользователь разблокировал бота (MEMBER).
+    - Когда бот был добавлен или удален из группового чата.
+    """
+    if not update.my_chat_member:
+        return
+
+    chat = update.my_chat_member.chat
+    user = update.my_chat_member.from_user
+    old_member = update.my_chat_member.old_chat_member
+    new_member = update.my_chat_member.new_chat_member
+    old_status = old_member.status if old_member else None
+    new_status = new_member.status if new_member else None
+
+    # Личные сообщения с пользователем
+    if chat.type == "private" and user:
+        if new_status in (ChatMember.BANNED, ChatMember.KICKED, ChatMember.LEFT):
+            # Пользователь заблокировал или остановил бота (уход)
+            changed, active_cnt, total_cnt = db.record_user_departure(
+                user_id=user.id,
+                reason="blocked",
+                username=user.username,
+                full_name=user.full_name,
+                details="Пользователь заблокировал или остановил бота (my_chat_member)"
+            )
+            if changed:
+                logger.info(f"🚫 [УХОД] Пользователь {user.id} (@{user.username}) заблокировал бота. Активных: {active_cnt}, Всего: {total_cnt}")
+        elif new_status == ChatMember.MEMBER and old_status in (ChatMember.BANNED, ChatMember.KICKED, ChatMember.LEFT):
+            # Пользователь разблокировал бота (возвращение / приход)
+            is_new, active_cnt, total_cnt = db.record_user_arrival(
+                user=user,
+                source="unblocked",
+                details="Пользователь разблокировал бота (my_chat_member)"
+            )
+            logger.info(f"✅ [ПРИХОД] Пользователь {user.id} (@{user.username}) вернулся в бота. Активных: {active_cnt}, Всего: {total_cnt}")
+    # Групповые чаты
+    elif chat.type in ("group", "supergroup"):
+        if new_status in (ChatMember.BANNED, ChatMember.KICKED, ChatMember.LEFT):
+            chat_prefs.remove_chat(chat.id)
+            logger.info(f"Группа {chat.id} ('{chat.title}') удалила бота.")
+        elif new_status in (ChatMember.MEMBER, ChatMember.ADMINISTRATOR):
+            c_name = chat_prefs.get_class(chat.id) or ""
+            chat_prefs.set_class(chat.id, c_name, title=chat.title)
+            logger.info(f"Бот добавлен в группу {chat.id} ('{chat.title}').")
+
+
 async def reset_nav_on_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Любая /команда в личном чате возвращает меню в исходное состояние"""
     chat = update.effective_chat
@@ -3480,8 +3512,14 @@ def main():
     # Регистрация глобального перехватчика ошибок
     app.add_error_handler(error_handler)
 
+    # Автоматическое сохранение аккаунтов и фиксация активности пользователей
+    app.add_handler(TypeHandler(Update, track_user_interaction), group=-2)
+
     # Любая команда в личном чате сбрасывает меню в главное состояние (выполняется до самой команды)
     app.add_handler(MessageHandler(filters.COMMAND, reset_nav_on_command), group=-1)
+
+    # Отслеживание событий блокировки/разблокировки бота пользователем (приход/уход) и добавления в группы
+    app.add_handler(ChatMemberHandler(handle_my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
 
     # Регистрация пользовательских команд
     app.add_handler(CommandHandler("start", cmd_start))
@@ -3513,6 +3551,8 @@ def main():
     app.add_handler(CommandHandler("deladmin", cmd_deladmin))
     app.add_handler(CommandHandler("admins", cmd_admins))
     app.add_handler(CommandHandler("setusers", cmd_setusers))
+    app.add_handler(CommandHandler(["accounts", "users"], cmd_accounts))
+    app.add_handler(CommandHandler(["history", "events"], cmd_history))
 
     # Регистрация callback queries
     app.add_handler(CallbackQueryHandler(handle_callback_query))

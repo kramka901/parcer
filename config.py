@@ -187,6 +187,8 @@ TIMETABLE_CACHE_TTL = 3600  # 1 час для базового расписан�
 SUBSTITUTION_CACHE_TTL = 300  # 5 минут для замен
 
 # Файлы сохранения данных и кэша
+DATABASE_FILE = BASE_DIR / "database.db"
+DB_PATH = Path(os.getenv("DATABASE_FILE", str(DATABASE_FILE)))
 USER_DATA_FILE = BASE_DIR / "user_preferences.json"
 USER_BACKUP_FILE = BASE_DIR / "user_preferences.json.bak"
 CHAT_DATA_FILE = BASE_DIR / "chats_preferences.json"

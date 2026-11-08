@@ -232,7 +232,10 @@ def run_tests():
     assert count_after_return == 97, f"Ожидалось 97 пользователей после возвращения, получено {count_after_return}!"
 
     # Очистка тестового пользователя
-    user_prefs._data.pop(str(mock_user_id), None)
+    if hasattr(user_prefs, "delete_user"):
+        user_prefs.delete_user(mock_user_id)
+    else:
+        user_prefs._data.pop(str(mock_user_id), None)
     user_prefs.set_target_count(97)
     print("  ✅ Сохранение 97 пользователей и точное изменение счётчика протестированы успешно!")
 
@@ -243,6 +246,7 @@ def run_tests():
     chat_prefs.set_class(test_group_id, "10A", title="Тестовая беседа 10A")
     assert chat_prefs.get_class(test_group_id) == "10A", "К чату должен быть привязан класс 10A!"
     kb = get_group_chat_keyboard(test_group_id)
+    chat_prefs.remove_chat(test_group_id)
     assert any("10A" in btn.text for row in kb.inline_keyboard for btn in row), "Кнопка клавиатуры группы должна содержать 10A!"
     chat_prefs.remove_chat(test_group_id)
     print("  ✅ Групповые чаты и отдельная панель вызова работают корректно!")

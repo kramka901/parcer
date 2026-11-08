@@ -7,3 +7,6 @@ user_preferences.json.bak
 user_preferences_backup_*.json
 chats_preferences.json
 chats_preferences.json.bak
+*.db
+*.db-wal
+*.db-shm
