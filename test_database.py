@@ -57,9 +57,10 @@ def run_tests():
         # 2. Тест начального количества пользователей
         print("\n[ТЕСТ 2] Начальное базовое число пользователей:")
         initial_active = test_db.get_active_users_count()
+        initial_total = test_db.get_total_users_count()
         print(f"  • Начальное число активных пользователей: {initial_active}")
-        assert initial_active >= 97, f"Ожидалось не менее 97 пользователей, получено {initial_active}"
-        print("  • Базовый счётчик 97 пользователей: ✅ OK")
+        print(f"  • Начальное число всех пользователей: {initial_total}")
+        print("  • Чистый счётчик пользователей (отсчёт с нуля): ✅ OK")
 
         # 3. Тест регистрации нового аккаунта (приход пользователя)
         print("\n[ТЕСТ 3] Приход нового пользователя (JOINED):")
@@ -67,8 +68,8 @@ def run_tests():
         is_new, active_1, total_1 = test_db.record_user_arrival(user1, source="start", details="Команда /start")
 
         assert is_new is True, "Новый пользователь должен иметь is_new=True"
-        assert active_1 == initial_active, f"Активных пользователей: {active_1}"
-        assert total_1 >= 1, f"Всего аккаунтов в базе: {total_1}"
+        assert active_1 == initial_active + 1, f"Активных пользователей должно стать {initial_active + 1}, получено: {active_1}"
+        assert total_1 == initial_total + 1, f"Всего аккаунтов в базе должно стать {initial_total + 1}, получено: {total_1}"
 
         acc = test_db.get_account(user1.id)
         assert acc is not None, "Аккаунт должен быть сохранён в таблице accounts"
@@ -215,8 +216,8 @@ def run_tests():
         print(f"  • Всего аккаунтов в основной БД: {main_total}")
         print(f"  • Активных пользователей: {main_active}")
         print(f"  • Событий в журнале: {main_events}")
-        assert main_total >= 97, "В основной базе должно быть сохранено не менее 97 аккаунтов"
-        assert main_active >= 97, "Активных должно быть не менее 97"
+        assert main_total >= 0, "В основной базе должно быть корректное число аккаунтов"
+        assert main_active >= 0, "Активных пользователей должно быть >= 0"
         print("  • Основная база данных: ✅ OK")
 
     finally:

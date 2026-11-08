@@ -211,33 +211,31 @@ def run_tests():
     assert "106" in msg_teacher_rooms and "002" in msg_teacher_rooms, "В тексте сообщения должны быть указаны кабинеты!"
     print("  ✅ Кабинеты преподавателей сформированы и отформатированы корректно!")
 
-    # 10. Тест сохранения пользователей (97 пользователей) и уменьшения счётчика при выходе
-    print("\n[ТЕСТ 10] Сохранение 97 пользователей и уменьшение счётчика при выходе/блокировке:")
+    # 10. Тест учёта пользователей и изменения счётчика при приходе/выходе
+    print("\n[ТЕСТ 10] Учёт пользователей и изменение счётчика при приходе/выходе:")
     from bot import user_prefs
     initial_active = user_prefs.get_active_users_count()
-    print(f"  Начальное количество активных пользователей: {initial_active}")
-    assert initial_active == 97, f"Ожидалось 97 активных пользователей, получено {initial_active}!"
+    print(f"  Текущее количество активных пользователей: {initial_active}")
 
-    # Пользователь выходит/блокирует бота -> счетчик уменьшается до 96
+    # Пользователь регистрируется/запускает бота -> счётчик увеличивается на 1
     mock_user_id = 777000111
+    user_prefs.set_user_active(mock_user_id)
+    count_after_join = user_prefs.get_active_users_count()
+    print(f"  После прихода пользователя {mock_user_id}: {count_after_join}")
+    assert count_after_join == initial_active + 1, f"Ожидалось увеличение на 1, получено {count_after_join}!"
+
+    # Пользователь выходит/блокирует бота -> счетчик уменьшается на 1
     user_prefs.set_user_inactive(mock_user_id, reason="test_block")
     count_after_leave = user_prefs.get_active_users_count()
     print(f"  После выхода пользователя {mock_user_id}: {count_after_leave}")
-    assert count_after_leave == 96, f"Ожидалось 96 пользователей после выхода, получено {count_after_leave}!"
-
-    # Пользователь возвращается -> счетчик возвращается к 97
-    user_prefs.set_user_active(mock_user_id)
-    count_after_return = user_prefs.get_active_users_count()
-    print(f"  После возвращения пользователя {mock_user_id}: {count_after_return}")
-    assert count_after_return == 97, f"Ожидалось 97 пользователей после возвращения, получено {count_after_return}!"
+    assert count_after_leave == initial_active, f"Ожидалось {initial_active} пользователей после выхода, получено {count_after_leave}!"
 
     # Очистка тестового пользователя
     if hasattr(user_prefs, "delete_user"):
         user_prefs.delete_user(mock_user_id)
     else:
         user_prefs._data.pop(str(mock_user_id), None)
-    user_prefs.set_target_count(97)
-    print("  ✅ Сохранение 97 пользователей и точное изменение счётчика протестированы успешно!")
+    print("  ✅ Точное изменение счётчика при приходе и уходе протестировано успешно!")
 
     # 11. Тест поддержки групповых чатов и привязки класса к беседе
     print("\n[ТЕСТ 11] Поддержка групповых чатов (привязка класса к беседе):")
@@ -296,6 +294,35 @@ def run_tests():
     where_msg = parser.format_whereis_teacher_for_telegram("Kulakova Dariya")
     assert "Kulakova Dariya" in where_msg, "Сообщение о местонахождении учителя должно содержать имя учителя!"
     print("  ✅ Форматирование свободных кабинетов и статуса учителя работает безупречно!")
+
+    # 17. Тест расписания школьных звонков и проверки отсутствия хардкода 97
+    print("\n[ТЕСТ 17] Расписание школьных звонков и проверка чистого счётчика пользователей:")
+    from bot import get_bells_schedule_text
+    bells_text = get_bells_schedule_text()
+    assert "Расписание звонков" in bells_text, "В тексте должно быть расписание звонков!"
+    assert "08:30" in bells_text and "16:15" in bells_text, "В расписании должны быть указаны уроки с 1 по 8!"
+    print("  • Расписание звонков и статус уроков сформированы: ✅ OK")
+
+    # Проверка, что при отсутствии пользователей счётчик равен 0 (не 97!)
+    from database import Database
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        empty_db_path = Path(tmp_dir) / "empty_test.db"
+        empty_user_file = Path(tmp_dir) / "empty_users.json"
+        empty_admins_file = Path(tmp_dir) / "empty_admins.json"
+        empty_chats_file = Path(tmp_dir) / "empty_chats.json"
+        empty_db = Database(
+            db_path=empty_db_path,
+            user_data_file=empty_user_file,
+            admins_file=empty_admins_file,
+            chat_data_file=empty_chats_file,
+            enable_json_sync=False
+        )
+        assert empty_db.get_total_users_count() == 0, "В пустой базе общее число пользователей должно быть 0!"
+        assert empty_db.get_active_users_count() == 0, "В пустой базе активных пользователей должно быть 0 (не 97)!"
+        stats_empty = empty_db.get_events_stats_summary()
+        assert stats_empty["active_users"] == 0 and stats_empty["total_accounts"] == 0, "Статистика пустой базы должна показывать 0!"
+    print("  • Чистый счётчик 0 пользователей в пустой базе (отсутствие ошибки 97): ✅ OK")
 
     print("=" * 65)
     print("🎉 ВСЕ ТЕСТЫ БОТА, ПАРСЕРА, ПОДГРУПП И АДМИН-ПАНЕЛИ УСПЕШНО ПРОЙДЕНЫ!")

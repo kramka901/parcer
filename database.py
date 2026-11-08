@@ -9,7 +9,6 @@
 6. Двустороннюю синхронизацию с JSON-файлами для обратной совместимости.
 """
 
-import os
 import sys
 import json
 import sqlite3
@@ -18,6 +17,7 @@ import threading
 from pathlib import Path
 from datetime import datetime, date
 from typing import Optional, Dict, Any, List, Tuple
+from contextlib import contextmanager
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
@@ -64,14 +64,19 @@ class Database:
         self._init_db()
         self._migrate_from_json_if_needed()
 
-    def get_connection(self) -> sqlite3.Connection:
-        """Создает и настраивает подключение к SQLite с поддержкой WAL и строковым доступом к колонкам"""
+    @contextmanager
+    def get_connection(self):
+        """Создает и настраивает подключение к SQLite с поддержкой WAL и автоматическим закрытием дескрипторов"""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA foreign_keys=ON;")
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     # ================= Инициализация схемы БД =================
 
@@ -157,6 +162,12 @@ class Database:
                         value TEXT
                     );
                 """)
+
+                # Очистка фиктивных аккаунтов и исправление старого ошибочного target_count=97
+                conn.execute("DELETE FROM accounts WHERE user_id LIKE 'saved_user_%';")
+                conn.execute("DELETE FROM user_events WHERE user_id LIKE 'saved_user_%';")
+                conn.execute("UPDATE bot_meta SET value = '0' WHERE key = 'target_count' AND value = '97';")
+                conn.execute("INSERT OR IGNORE INTO bot_meta (key, value) VALUES ('target_count', '0');")
                 conn.commit()
 
     # ================= Мета-данные и целевое число пользователей =================
@@ -181,9 +192,13 @@ class Database:
     def get_target_count(self) -> int:
         val = self.get_meta("target_count", str(INITIAL_USER_COUNT))
         try:
-            return int(val)
+            target = int(val)
+            if target == 97:
+                self.set_meta("target_count", "0")
+                return 0
+            return max(0, target)
         except (ValueError, TypeError):
-            return INITIAL_USER_COUNT
+            return 0
 
     def set_target_count(self, target: int):
         self.set_meta("target_count", str(int(target)))
@@ -196,27 +211,28 @@ class Database:
         with self._lock:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) FROM accounts")
+                cur.execute("SELECT COUNT(*) FROM accounts WHERE user_id NOT LIKE 'saved_user_%'")
                 return cur.fetchone()[0]
 
     def get_active_users_count(self) -> int:
         """
         Возвращает количество активных пользователей.
-        Учитывает целевое базовое число (target_count=97) и вычитает деактивированных/ушедших,
-        масштабируясь при росте реальной аудитории.
+        Счёт идёт с нуля по реальным зарегистрированным пользователям (is_active = 1).
+        Если администратор явно задал целевой минимум через /setusers, учитывает его.
         """
         with self._lock:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) FROM accounts WHERE is_active = 0")
-                inactive_count = cur.fetchone()[0]
-
-                # Считаем реальных пользователей (числовые ID или без префикса saved_user_)
-                cur.execute("SELECT COUNT(*) FROM accounts WHERE user_id NOT LIKE 'saved_user_%'")
-                real_users_count = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM accounts WHERE is_active = 1 AND user_id NOT LIKE 'saved_user_%'")
+                real_active = cur.fetchone()[0]
 
                 target = self.get_target_count()
-                base = max(target, real_users_count)
+                if target <= 0:
+                    return real_active
+
+                cur.execute("SELECT COUNT(*) FROM accounts WHERE is_active = 0 AND user_id NOT LIKE 'saved_user_%'")
+                inactive_count = cur.fetchone()[0]
+                base = max(target, real_active + inactive_count)
                 return max(0, base - inactive_count)
 
     # ================= Управление аккаунтами (Accounts) =================
@@ -254,9 +270,9 @@ class Database:
             with self.get_connection() as conn:
                 cur = conn.cursor()
                 if active_only:
-                    cur.execute("SELECT * FROM accounts WHERE is_active = 1 ORDER BY last_seen DESC")
+                    cur.execute("SELECT * FROM accounts WHERE is_active = 1 AND user_id NOT LIKE 'saved_user_%' ORDER BY last_seen DESC")
                 else:
-                    cur.execute("SELECT * FROM accounts ORDER BY last_seen DESC")
+                    cur.execute("SELECT * FROM accounts WHERE user_id NOT LIKE 'saved_user_%' ORDER BY last_seen DESC")
                 return [dict(r) for r in cur.fetchall()]
 
     def get_accounts_dict(self) -> Dict[str, Dict[str, Any]]:
@@ -267,7 +283,7 @@ class Database:
         with self._lock:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT * FROM accounts")
+                cur.execute("SELECT * FROM accounts WHERE user_id NOT LIKE 'saved_user_%'")
                 res = {}
                 for row in cur.fetchall():
                     d = dict(row)
@@ -570,30 +586,29 @@ class Database:
         with self._lock:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) FROM user_events")
+                cur.execute("SELECT COUNT(*) FROM user_events WHERE user_id NOT LIKE 'saved_user_%'")
                 total_events = cur.fetchone()[0]
 
                 cur.execute("""
                     SELECT COUNT(*) FROM user_events
                     WHERE timestamp LIKE ? AND event_type IN ('JOINED', 'RETURNED')
+                      AND user_id NOT LIKE 'saved_user_%'
                 """, (f"{today_prefix}%",))
                 joined_today = cur.fetchone()[0]
 
                 cur.execute("""
                     SELECT COUNT(*) FROM user_events
                     WHERE timestamp LIKE ? AND event_type IN ('LEFT', 'BLOCKED', 'STOPPED')
+                      AND user_id NOT LIKE 'saved_user_%'
                 """, (f"{today_prefix}%",))
                 left_today = cur.fetchone()[0]
 
-                cur.execute("""
-                    SELECT COUNT(*) FROM accounts WHERE is_active = 1
-                """)
                 active_count = self.get_active_users_count()
 
-                cur.execute("SELECT COUNT(*) FROM accounts")
+                cur.execute("SELECT COUNT(*) FROM accounts WHERE user_id NOT LIKE 'saved_user_%'")
                 total_accounts = cur.fetchone()[0]
 
-                cur.execute("SELECT COUNT(*) FROM accounts WHERE is_active = 0")
+                cur.execute("SELECT COUNT(*) FROM accounts WHERE is_active = 0 AND user_id NOT LIKE 'saved_user_%'")
                 inactive_count = cur.fetchone()[0]
 
                 return {
@@ -816,12 +831,14 @@ class Database:
                         users_data = json.load(f)
 
                     meta = users_data.get("_meta", {})
-                    target_count = meta.get("target_count", INITIAL_USER_COUNT)
+                    raw_target = meta.get("target_count", INITIAL_USER_COUNT)
+                    # Сбрасываем ошибочное значение 97 на 0 для чистого отсчёта пользователей с нуля
+                    target_count = 0 if str(raw_target).strip() in ("97", "") else int(raw_target)
                     self.set_meta("target_count", str(target_count))
 
                     with self.get_connection() as conn:
                         for uid_str, u in users_data.items():
-                            if uid_str.startswith("_"):
+                            if uid_str.startswith("_") or uid_str.startswith("saved_user_"):
                                 continue
 
                             telegram_id = int(uid_str) if uid_str.isdigit() else None

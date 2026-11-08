@@ -23,7 +23,6 @@ from telegram import (
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
     ChatMember,
-    ChatMemberUpdated,
 )
 from telegram.constants import ParseMode
 from telegram.error import TelegramError, Forbidden, Conflict, NetworkError, TimedOut
@@ -40,14 +39,7 @@ from telegram.ext import (
 
 from config import (
     TELEGRAM_BOT_TOKEN,
-    DATABASE_FILE,
-    USER_DATA_FILE,
-    USER_BACKUP_FILE,
-    CHAT_DATA_FILE,
-    INITIAL_USER_COUNT,
     SEEN_SUBSTITUTIONS_FILE,
-    ADMINS_FILE,
-    DEFAULT_ADMIN_IDS,
     SUBSTITUTION_CHECK_INTERVAL,
     WEEKDAYS_SHORT_RU,
     get_env_diagnostic_info
@@ -246,10 +238,11 @@ def get_group_chat_keyboard(chat_id: Any) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🚪 Свободные кабинеты", callback_data=f"grp_free_{chat_id}"),
-            InlineKeyboardButton("👩‍🏫 Учителя", callback_data="btn_browse_teachers")
+            InlineKeyboardButton("🔔 Звонки", callback_data=f"grp_bells_{chat_id}")
         ],
         [
-            InlineKeyboardButton("⚙️ Сменить класс беседы", callback_data=f"grp_setclass_{chat_id}")
+            InlineKeyboardButton("👩‍🏫 Учителя", callback_data="btn_browse_teachers"),
+            InlineKeyboardButton("⚙️ Сменить класс", callback_data=f"grp_setclass_{chat_id}")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -335,6 +328,10 @@ def get_main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("🏫 Замены всей школы", callback_data="btn_all_subst"),
             ],
             [
+                InlineKeyboardButton("🔔 Расписание звонков", callback_data="btn_bells"),
+                InlineKeyboardButton("🚪 Свободные кабинеты", callback_data="btn_freerooms"),
+            ],
+            [
                 InlineKeyboardButton(f"👩‍🏫 Профиль: {user_teacher}", callback_data="btn_profile"),
             ]
         ]
@@ -355,6 +352,10 @@ def get_main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("👩‍🏫 Расписание учителей", callback_data="btn_browse_teachers"),
             InlineKeyboardButton("🏫 Замены всей школы", callback_data="btn_all_subst"),
+        ],
+        [
+            InlineKeyboardButton("🔔 Расписание звонков", callback_data="btn_bells"),
+            InlineKeyboardButton("🚪 Свободные кабинеты", callback_data="btn_freerooms"),
         ]
     ]
 
@@ -862,6 +863,12 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /teachers — Список всех преподавателей школы MJG\n"
         "• /substitutions `[класс]` — Актуальные замены уроков из EduPage\n"
         "• /classes — Список всех классов школы (1A – 12C)\n"
+        "• /bells или /звонки — Расписание школьных звонков и время до конца урока\n"
+        "• /rooms — Справочник всех учебных кабинетов школы\n"
+        "• /room `<номер>` — Расписание занятий в конкретном кабинете\n"
+        "• /freerooms — Свободные кабинеты прямо сейчас\n"
+        "• /whereis `<учитель>` — Где прямо сейчас находится преподаватель\n"
+        "• /search `<запрос>` — Поиск кабинета, учителя или класса\n"
         "• /setclass `<класс>` — Сохранить свой класс (например, `/setclass 10A`)\n"
         "• /setteacher `<фамилия>` — Сохранить профиль учителя (например, `/setteacher Кулакова`)\n"
         "• /notify — Включить / выключить авто-уведомления о новых заменах\n"
@@ -1321,6 +1328,90 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_reply(update, text)
 
 
+# ================= Расписание школьных звонков =================
+
+PERIODS_INFO = [
+    (1, "08:30", "09:15", "10 мин"),
+    (2, "09:25", "10:10", "25 мин (обед / большая перемена)"),
+    (3, "10:35", "11:20", "25 мин (обед / большая перемена)"),
+    (4, "11:45", "12:30", "25 мин (обед / большая перемена)"),
+    (5, "12:55", "13:40", "10 мин"),
+    (6, "13:50", "14:35", "5 мин"),
+    (7, "14:40", "15:25", "5 мин"),
+    (8, "15:30", "16:15", "—"),
+]
+
+
+def get_bells_schedule_text() -> str:
+    """Формирует наглядное расписание звонков школы и определяет текущий статус уроков/перемен"""
+    now = datetime.now()
+    cur_time_str = now.strftime("%H:%M")
+    now_min = now.hour * 60 + now.minute
+    weekday = now.weekday()  # 0=Пн, 4=Пт, 5=Сб, 6=Вс
+
+    status_line = ""
+    if weekday in (5, 6):
+        status_line = "🏖 *Сегодня выходной день. Уроков в школе нет.*"
+    else:
+        first_start_min = 8 * 60 + 30
+        last_end_min = 16 * 60 + 15
+        if now_min < first_start_min:
+            diff = first_start_min - now_min
+            status_line = f"⏳ *Уроки ещё не начались.* До 1-го урока осталось: *{diff} мин.*"
+        elif now_min >= last_end_min:
+            status_line = "🏁 *Все уроки на сегодня завершены.*"
+        else:
+            current_found = False
+            for p, start, end, brk in PERIODS_INFO:
+                sh, sm = map(int, start.split(":"))
+                eh, em = map(int, end.split(":"))
+                start_m = sh * 60 + sm
+                end_m = eh * 60 + em
+                if start_m <= now_min < end_m:
+                    left = end_m - now_min
+                    status_line = f"🟢 *Сейчас идёт {p}-й урок ({start}–{end}).* До звонка: *{left} мин.*"
+                    current_found = True
+                    break
+
+            if not current_found:
+                for i in range(len(PERIODS_INFO) - 1):
+                    p_curr, _, end_curr, _ = PERIODS_INFO[i]
+                    p_next, start_next, _, _ = PERIODS_INFO[i + 1]
+                    eh, em = map(int, end_curr.split(":"))
+                    sh, sm = map(int, start_next.split(":"))
+                    b_start = eh * 60 + em
+                    b_end = sh * 60 + sm
+                    if b_start <= now_min < b_end:
+                        left = b_end - now_min
+                        status_line = f"🟡 *Сейчас перемена ({end_curr}–{start_next}).* До {p_next}-го урока: *{left} мин.*"
+                        break
+
+    lines = [
+        "🔔 *Расписание звонков Tallinna Mustjõe Gümnaasium (MJG):*\n",
+        f"🕒 Текущее время: *{cur_time_str}*",
+        f"{status_line}\n" if status_line else "",
+        "• *1 урок:* `08:30 – 09:15` _(перемена 10 мин)_",
+        "• *2 урок:* `09:25 – 10:10` _(обед / перемена 25 мин)_",
+        "• *3 урок:* `10:35 – 11:20` _(обед / перемена 25 мин)_",
+        "• *4 урок:* `11:45 – 12:30` _(обед / перемена 25 мин)_",
+        "• *5 урок:* `12:55 – 13:40` _(перемена 10 мин)_",
+        "• *6 урок:* `13:50 – 14:35` _(перемена 5 мин)_",
+        "• *7 урок:* `14:40 – 15:25` _(перемена 5 мин)_",
+        "• *8 урок:* `15:30 – 16:15`",
+        "\n💡 _Перемены по 25 минут (после 2, 3 и 4 уроков) отведены под обед в школьной столовой._"
+    ]
+    return "\n".join(lines)
+
+
+async def cmd_bells(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /bells или /звонки: расписание школьных звонков и время до конца урока"""
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Обновить статус", callback_data="btn_bells")],
+        [InlineKeyboardButton("◀️ В главное меню", callback_data="btn_main_menu")]
+    ])
+    await safe_reply(update, get_bells_schedule_text(), reply_markup=keyboard)
+
+
 async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выход и отписка от бота: /stop или /leave"""
     user = update.effective_user
@@ -1360,20 +1451,23 @@ async def cmd_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📋 *Последние активные аккаунты:*"
     ]
 
-    for i, acc in enumerate(real_accs[:12], 1):
-        status = "🟢" if acc.get("is_active") else "🔴"
-        uname = f"@{acc['username']}" if acc.get("username") else "без @username"
-        role_info = (
-            f"👩‍🏫 {acc['teacher_name']}"
-            if acc.get("role") == "teacher"
-            else f"👨‍🎓 {acc.get('class_name') or 'класс не выбран'}"
-        )
-        notif_st = "🔔" if acc.get("notifications") else "🔕"
-        last_dt = (acc.get("last_seen") or "—")[:16]
-        lines.append(
-            f"{i}. {status} *{acc.get('full_name') or 'Пользователь'}* ({uname})\n"
-            f"   └ ID: `{acc['user_id']}` | {role_info} | {notif_st} | Визит: `{last_dt}`"
-        )
+    if not real_accs:
+        lines.append("_Пока нет сохранённых пользователей в базе данных._")
+    else:
+        for i, acc in enumerate(real_accs[:12], 1):
+            status = "🟢" if acc.get("is_active") else "🔴"
+            uname = f"@{acc['username']}" if acc.get("username") else "без @username"
+            role_info = (
+                f"👩‍🏫 {acc['teacher_name']}"
+                if acc.get("role") == "teacher"
+                else f"👨‍🎓 {acc.get('class_name') or 'класс не выбран'}"
+            )
+            notif_st = "🔔" if acc.get("notifications") else "🔕"
+            last_dt = (acc.get("last_seen") or "—")[:16]
+            lines.append(
+                f"{i}. {status} *{acc.get('full_name') or 'Пользователь'}* ({uname})\n"
+                f"   └ ID: `{acc['user_id']}` | {role_info} | {notif_st} | Визит: `{last_dt}`"
+            )
 
     text = "\n".join(lines)
     keyboard = InlineKeyboardMarkup([
@@ -1624,7 +1718,7 @@ async def cmd_setusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args or not context.args[0].isdigit():
-        await safe_reply(update, "⚠️ Использование: `/setusers <число>`\nНапример: `/setusers 97`")
+        await safe_reply(update, "⚠️ Использование: `/setusers <число>`\nНапример: `/setusers 50` (0 для естественного подсчёта с нуля)")
         return
 
     new_target = int(context.args[0])
@@ -1875,7 +1969,32 @@ async def _process_callback_query(update: Update, context: ContextTypes.DEFAULT_
     if data.startswith("grp_free_"):
         cid = data.replace("grp_free_", "")
         msg = (await pcall(parser.format_free_rooms_for_telegram))
-        await safe_reply(update, msg, reply_markup=get_group_chat_keyboard(cid))
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить", callback_data=f"grp_free_{cid}")],
+            [InlineKeyboardButton("◀️ Панель беседы", callback_data=f"grp_call_{cid}")]
+        ])
+        await safe_reply(update, msg, reply_markup=keyboard)
+        return
+
+    if data.startswith("grp_bells_"):
+        cid = data.replace("grp_bells_", "")
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить статус", callback_data=f"grp_bells_{cid}")],
+            [InlineKeyboardButton("◀️ Панель беседы", callback_data=f"grp_call_{cid}")]
+        ])
+        await safe_reply(update, get_bells_schedule_text(), reply_markup=keyboard)
+        return
+
+    if data.startswith("grp_call_"):
+        cid = data.replace("grp_call_", "")
+        c_name = chat_prefs.get_class(cid) or "Не выбран"
+        text = (
+            f"🏫 *Управление расписанием беседы (MJG)*\n\n"
+            f"• Привязанный класс: *{c_name}*\n"
+            f"• Авто-уведомления: *ВКЛ*\n\n"
+            f"Выберите нужное действие ниже:"
+        )
+        await safe_reply(update, text, reply_markup=get_group_chat_keyboard(cid))
         return
 
     if data.startswith("grp_setclass_"):
@@ -2114,6 +2233,23 @@ async def _process_callback_query(update: Update, context: ContextTypes.DEFAULT_
         await safe_reply(update, msg, reply_markup=kb)
         return
 
+    if data == "btn_bells":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить статус", callback_data="btn_bells")],
+            [InlineKeyboardButton("◀️ В главное меню", callback_data="btn_main_menu")]
+        ])
+        await safe_reply(update, get_bells_schedule_text(), reply_markup=keyboard)
+        return
+
+    if data == "btn_freerooms":
+        msg = (await pcall(parser.format_free_rooms_for_telegram))
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить", callback_data="btn_freerooms")],
+            [InlineKeyboardButton("◀️ В главное меню", callback_data="btn_main_menu")]
+        ])
+        await safe_reply(update, msg, reply_markup=keyboard)
+        return
+
     # 11. Действия для конкретного класса
     if data.startswith("today_"):
         c_name = data.replace("today_", "")
@@ -2183,10 +2319,10 @@ async def _process_callback_query(update: Update, context: ContextTypes.DEFAULT_
             await safe_reply(update, "⚠️ Текст рассылки не найден. Попробуйте снова.", reply_markup=get_admin_main_keyboard())
             return
 
-        all_users = [k for k in user_prefs.get_all_users().keys() if k.isdigit()]
+        all_users = [k for k, u in user_prefs.get_all_users().items() if k.isdigit() and u.get("is_active", True)]
         total_count = len(all_users)
 
-        status_msg = await query.message.reply_text(f"⏳ Начинаем рассылку для {total_count} пользователей...")
+        status_msg = await query.message.reply_text(f"⏳ Начинаем рассылку для {total_count} активных пользователей...")
 
         success_count = 0
         blocked_count = 0
@@ -2354,6 +2490,7 @@ B_SUBST = "🔄 Замены"
 B_ALLSUBST = "🏫 Замены школы"
 B_TEACHERS = "👩‍🏫 Учителя"
 B_FREE = "🚪 Свободные кабинеты"
+B_BELLS = "🔔 Звонки"
 B_CLASS = "🏫 Мой класс"
 B_PROFILE = "⚙️ Профиль"
 B_ADMIN = "👑 Админ"
@@ -2403,6 +2540,7 @@ ALIASES = {
     "замены": B_SUBST, "substitutions": B_SUBST, "zameni": B_SUBST,
     "учителя": B_TEACHERS, "teachers": B_TEACHERS,
     "кабинеты": B_FREE, "свободные кабинеты": B_FREE, "rooms": B_FREE, "freerooms": B_FREE,
+    "звонки": B_BELLS, "звонок": B_BELLS, "расписание звонков": B_BELLS, "bells": B_BELLS, "bell": B_BELLS,
     "меню": B_MENU, "главное меню": B_MENU, "menu": B_MENU, "старт": B_MENU, "start": B_MENU,
     "профиль": B_PROFILE, "настройки": B_PROFILE, "profile": B_PROFILE, "settings": B_PROFILE,
     "админ": B_ADMIN, "админка": B_ADMIN, "admin": B_ADMIN,
@@ -2440,7 +2578,8 @@ def main_reply_kb(uid: int) -> ReplyKeyboardMarkup:
             [B_T_WEEK, B_T_SUBST],
             [B_T_ROOMS, B_T_WHERE],
             [B_TEACHERS, B_ALLSUBST],
-            [B_FREE, B_PROFILE],
+            [B_FREE, B_BELLS],
+            [B_PROFILE],
         ]
     else:
         rows = [
@@ -2448,7 +2587,7 @@ def main_reply_kb(uid: int) -> ReplyKeyboardMarkup:
             [B_WEEK, B_SUBST],
             [B_TEACHERS, B_ALLSUBST],
             [B_FREE, B_CLASS],
-            [B_PROFILE],
+            [B_BELLS, B_PROFILE],
         ]
     if admin_manager.is_admin(uid):
         rows[-1].append(B_ADMIN)
@@ -2624,13 +2763,16 @@ async def run_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_reply(update, "⚠️ Текст рассылки не найден. Попробуйте снова.")
         return
 
-    all_users = [k for k in user_prefs.get_all_users().keys() if k.isdigit()]
+    all_users = [k for k, u in user_prefs.get_all_users().items() if k.isdigit() and u.get("is_active", True)]
     total_count = len(all_users)
     success = blocked = failed = 0
-    await update.effective_chat.send_message(f"⏳ Начинаем рассылку для {total_count} пользователей...")
+    await update.effective_chat.send_message(f"⏳ Начинаем рассылку для {total_count} активных пользователей...")
 
     for uid_str in all_users:
-        target_uid = int(uid_str)
+        try:
+            target_uid = int(uid_str)
+        except (ValueError, TypeError):
+            continue
         try:
             await context.bot.send_message(
                 chat_id=target_uid,
@@ -2874,6 +3016,15 @@ async def private_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await safe_reply(update, msg)
         return True
 
+    if t == B_BELLS:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить статус", callback_data="btn_bells")],
+            [InlineKeyboardButton("◀️ В главное меню", callback_data="btn_main_menu")]
+        ])
+        nav_set(uid, "main")
+        await safe_reply(update, get_bells_schedule_text(), reply_markup=keyboard)
+        return True
+
     # ---------- Просмотр расписания другого учителя ----------
     if t in (V_TODAY, V_TOMORROW, V_WEEK, V_SUBST, V_ROOMS, V_WHERE):
         name = st.get("name") if state == "view_teacher" else None
@@ -3029,7 +3180,7 @@ async def private_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 ALL_BUTTON_LABELS = {
-    B_MENU, B_BACK, B_CANCEL, B_TODAY, B_TOMORROW, B_WEEK, B_SUBST, B_ALLSUBST, B_TEACHERS, B_FREE,
+    B_MENU, B_BACK, B_CANCEL, B_TODAY, B_TOMORROW, B_WEEK, B_SUBST, B_ALLSUBST, B_TEACHERS, B_FREE, B_BELLS,
     B_CLASS, B_PROFILE, B_ADMIN, B_T_TODAY, B_T_TOMORROW, B_T_WEEK, B_T_SUBST, B_T_ROOMS, B_T_WHERE,
     B_ROLE_STUDENT, B_ROLE_TEACHER, V_TODAY, V_TOMORROW, V_WEEK, V_SUBST, V_ROOMS, V_WHERE, V_OTHER,
     P_SUBGROUPS, P_CHANGE_CLASS, P_CHANGE_TEACHER, P_NOTIF_ON, P_NOTIF_OFF,
@@ -3533,7 +3684,8 @@ def main():
     app.add_handler(CommandHandler("notify", cmd_notify))
     app.add_handler(CommandHandler("today", cmd_today))
     app.add_handler(CommandHandler("tomorrow", cmd_tomorrow))
-    app.add_handler(CommandHandler("schedule", cmd_schedule))
+    app.add_handler(CommandHandler(["schedule", "week", "nedelya"], cmd_schedule))
+    app.add_handler(CommandHandler(["bells", "bell", "звонки", "звонок", "uroki", "time"], cmd_bells))
     app.add_handler(CommandHandler(["substitutions", "replacements", "zameni"], cmd_substitutions))
     app.add_handler(CommandHandler(["bot", "call", "mjg", "parcer", "raspisanie"], cmd_bot))
     app.add_handler(CommandHandler("room", cmd_room))
@@ -3541,7 +3693,7 @@ def main():
     app.add_handler(CommandHandler(["freerooms", "free"], cmd_freerooms))
     app.add_handler(CommandHandler(["whereis", "gde"], cmd_whereis))
     app.add_handler(CommandHandler(["search", "find", "poisk"], cmd_search))
-    app.add_handler(CommandHandler("stats", cmd_stats))
+    app.add_handler(CommandHandler(["stats", "status"], cmd_stats))
     app.add_handler(CommandHandler(["stop", "leave"], cmd_stop))
 
     # Регистрация команд администратора
