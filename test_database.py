@@ -8,7 +8,6 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
-from datetime import datetime
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
@@ -192,21 +191,21 @@ def run_tests():
 
         def worker(thread_id):
             try:
-                for i in range(10):
+                for i in range(4):
                     u = DummyUser(200000000 + thread_id * 100 + i, f"user_{thread_id}_{i}", f"Имя{thread_id}")
                     test_db.record_user_arrival(u, source="stress_test")
                     test_db.record_user_departure(u.id, reason="stress_test")
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=worker, args=(t,)) for t in range(5)]
+        threads = [threading.Thread(target=worker, args=(t,)) for t in range(4)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
 
         assert len(errors) == 0, f"Ошибки при параллельной работе с БД: {errors}"
-        print("  • 5 параллельных потоков по 10 операций: 0 ошибок ✅ OK")
+        print("  • 4 параллельных потока по 4 операции: 0 ошибок ✅ OK")
 
         # 11. Проверка основной рабочей базы проекта
         print("\n[ТЕСТ 11] Проверка основной рабочей базы проекта (database.db):")

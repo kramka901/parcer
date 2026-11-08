@@ -24,8 +24,8 @@ periods_dict = {
     "4": {"period": 4, "starttime": "11:45", "endtime": "12:30"},
     "5": {"period": 5, "starttime": "12:55", "endtime": "13:40"},
     "6": {"period": 6, "starttime": "13:50", "endtime": "14:35"},
-    "7": {"period": 7, "starttime": "14:45", "endtime": "15:30"},
-    "8": {"period": 8, "starttime": "15:40", "endtime": "16:25"}
+    "7": {"period": 7, "starttime": "14:40", "endtime": "15:25"},
+    "8": {"period": 8, "starttime": "15:30", "endtime": "16:15"}
 }
 
 classes_dict = {c: {"id": c, "name": c, "short": c} for c in classes_list}

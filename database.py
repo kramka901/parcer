@@ -163,10 +163,10 @@ class Database:
                     );
                 """)
 
-                # Очистка фиктивных аккаунтов и исправление старого ошибочного target_count=97
+                # Очистка фиктивных аккаунтов и исправление старого ошибочного target_count
                 conn.execute("DELETE FROM accounts WHERE user_id LIKE 'saved_user_%';")
                 conn.execute("DELETE FROM user_events WHERE user_id LIKE 'saved_user_%';")
-                conn.execute("UPDATE bot_meta SET value = '0' WHERE key = 'target_count' AND value = '97';")
+                conn.execute("UPDATE bot_meta SET value = '0' WHERE key = 'target_count';")
                 conn.execute("INSERT OR IGNORE INTO bot_meta (key, value) VALUES ('target_count', '0');")
                 conn.commit()
 
@@ -216,24 +216,14 @@ class Database:
 
     def get_active_users_count(self) -> int:
         """
-        Возвращает количество активных пользователей.
-        Счёт идёт с нуля по реальным зарегистрированным пользователям (is_active = 1).
-        Если администратор явно задал целевой минимум через /setusers, учитывает его.
+        Возвращает точное количество реально активных пользователей (is_active = 1).
+        Отсчёт идёт строго по реальным зарегистрированным пользователям без искусственных накруток.
         """
         with self._lock:
             with self.get_connection() as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) FROM accounts WHERE is_active = 1 AND user_id NOT LIKE 'saved_user_%'")
-                real_active = cur.fetchone()[0]
-
-                target = self.get_target_count()
-                if target <= 0:
-                    return real_active
-
-                cur.execute("SELECT COUNT(*) FROM accounts WHERE is_active = 0 AND user_id NOT LIKE 'saved_user_%'")
-                inactive_count = cur.fetchone()[0]
-                base = max(target, real_active + inactive_count)
-                return max(0, base - inactive_count)
+                return cur.fetchone()[0]
 
     # ================= Управление аккаунтами (Accounts) =================
 

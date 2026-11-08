@@ -198,7 +198,7 @@ SUBSTITUTIONS_CACHE_FILE = BASE_DIR / "substitutions_cache.json"
 TEACHERS_DATA_FILE = BASE_DIR / "teachers.json"
 ADMINS_FILE = BASE_DIR / "admins.json"
 
-# Начальное базовое количество пользователей (по умолчанию 0, реальный подсчёт с нуля)
+# Начальное базовое количество пользователей (0 по умолчанию, реальный подсчёт с нуля)
 INITIAL_USER_COUNT = _safe_int(os.getenv("INITIAL_USER_COUNT"), 0)
 if INITIAL_USER_COUNT == 97:
     INITIAL_USER_COUNT = 0
